@@ -1,0 +1,1 @@
+package Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::RenewalRepository; use Modern::Perl; use parent 'Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::Base'; sub new{shift->SUPER::new('renewals')} 1;

@@ -1,0 +1,1 @@
+package Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::EventRepository; use Modern::Perl; use parent 'Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::Base'; sub new{shift->SUPER::new('events')} 1;

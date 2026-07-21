@@ -1,0 +1,3 @@
+# Upgrade
+
+Back up first, record the current plugin/schema versions, inspect the replacement KPZ, and install through Koha's supported plugin upgrade workflow. Migrations are ordered by integer schema version and recorded in `plugin_jzl_ebook_schema_versions`; rerunning upgrade is safe. The v0.1.0 upgrade delegates to the idempotent schema-1 installer. It never drops or rewrites institutional data. After upgrade restart/reload services only as required, check Plack/Apache, health/version, permissions, the staff page, existing plugins, and the unchanged portal. Regression-test every later 26.05 maintenance release; do not upgrade to 26.11+ on this compatibility claim.

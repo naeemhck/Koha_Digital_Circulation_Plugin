@@ -1,0 +1,5 @@
+# Testing
+
+On the Koha 26.05.01.000 host run the tests and build inside `koha-shell`, for example `sudo koha-shell -c "cd /path/to/repository && prove -I. -v t && ./build-kpz.sh" library`, then run `./scripts/validate-package.sh dist/*.kpz`. For database integration, install into a disposable test instance, select dedicated test patron/biblio records, and run `KOHA_INSTANCE=library-test KOHA_JZL_FIXTURES=1 koha-shell library-test -c 'perl scripts/load-test-fixtures.pl --patron ID --biblio ID'`. Cleanup adds `--cleanup` and affects only `TEST-JZL-*` records.
+
+Verify clean/repeated install, migration rows/indexes/checks, partial-failure rerun, preserved uninstall, invalid patron/biblio service validation, uniqueness guards, state transitions, API authentication/permissions/filter/pagination/not-found/safe errors, staff tabs/empty/error/denial/read-only states, navigation, keyboard focus, and absence of write controls. Fixture code refuses to run unless both explicit test guards are present and never runs automatically.

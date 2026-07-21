@@ -1,0 +1,3 @@
+# Security
+
+Every data route is GET-only, Koha-authenticated, permission checked, parameterized, paginated, and allowlist-sorted. Staff identity is server-derived. Event list responses omit payload JSON. Safe errors expose stable codes only. Logs must contain correlation ID, action, version, safe aggregate ID, result, duration, and stable error code—never credentials, OAuth/session/reader tokens, authorization headers, protected URLs, SQL, stack traces, or unnecessary patron details. No browser integration secret, protected PDF, reader token, fixture endpoint, staff request creation, standard hold/checkout, access grant, or expiry process exists in Phase 1.

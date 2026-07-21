@@ -1,0 +1,16 @@
+[% USE raw %]
+[% INCLUDE 'doc-head-open.inc' %]<title>Digital eBook Requests &rsaquo; Circulation &rsaquo; Koha</title>[% INCLUDE 'doc-head-close.inc' %]
+</head><body id="jzl_digital_circulation" class="circ"><div id="wrapper">[% INCLUDE 'header.inc' %][% INCLUDE 'circ-search.inc' %]
+<nav aria-label="Breadcrumb"><ol class="breadcrumb"><li><a href="/cgi-bin/koha/mainpage.pl">Home</a></li><li><a href="/cgi-bin/koha/circ/circulation-home.pl">Circulation</a></li><li aria-current="page">Digital eBook Requests</li></ol></nav>
+<main id="main-content" class="container-fluid"><h1>Junaid Zaidi Library Digital eBook Requests</h1>
+[% IF !authorized %]<div class="alert alert-danger" role="alert"><h2>Permission denied</h2><p>The circulation permission is required.</p></div>
+[% ELSE %]
+<div class="alert alert-info" role="status"><strong>Phase 1 — read only.</strong> The existing student portal remains authoritative. No approval, rejection, renewal, return, or revocation actions are available here.</div>
+<div class="alert alert-warning" id="compatibility-warning" hidden role="alert">Compatibility warning: this plugin was tested with Koha [% tested_koha | html %].</div>
+<form id="jzl-filters" class="form-inline" aria-label="Digital circulation filters"><label for="jzl-search">Search ID or reference</label> <input id="jzl-search" type="search" class="form-control"> <button type="submit" class="btn btn-default">Filter current view</button></form>
+<ul class="nav nav-tabs" id="jzl-tabs" role="tablist">
+[% FOREACH tab IN [{id=>'requests-PENDING',label=>'Pending Requests'},{id=>'requests-APPROVED',label=>'Approved Requests'},{id=>'requests-REJECTED',label=>'Rejected Requests'},{id=>'requests-CANCELLED',label=>'Cancelled Requests'},{id=>'loans-ACTIVE',label=>'Active Digital Loans'},{id=>'renewals-PENDING',label=>'Renewal Requests'},{id=>'loans-RETURNED',label=>'Returned Loans'},{id=>'loans-EXPIRED',label=>'Expired Loans'},{id=>'loans-REVOKED',label=>'Revoked Loans'},{id=>'events-',label=>'Audit Events'}] %]<li role="presentation"><button type="button" class="jzl-tab" data-view="[% tab.id | html %]">[% tab.label | html %]</button></li>[% END %]
+</ul><section aria-live="polite" aria-busy="false"><h2 id="jzl-view-heading">Pending Requests</h2><p id="jzl-loading" hidden>Loading…</p><div id="jzl-error" class="alert alert-danger" hidden></div><div class="table-responsive"><table class="table table-striped" id="jzl-table"><caption class="sr-only">Digital circulation records</caption><thead></thead><tbody></tbody></table></div><p id="jzl-empty" hidden>No records match this view.</p><nav aria-label="Results pages" id="jzl-pagination"></nav></section>
+<p class="text-muted">Plugin [% plugin_version | html %], schema [% schema_version | html %].</p>
+[% END %]</main>[% INCLUDE 'intranet-bottom.inc' %]
+[% IF authorized %]<script src="/api/v1/contrib/jzl-digital-circulation/assets/jzl-digital-circulation.js"></script>[% END %]</div></body></html>

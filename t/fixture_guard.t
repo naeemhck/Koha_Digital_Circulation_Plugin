@@ -1,0 +1,1 @@
+use Modern::Perl;use Test::More;local$/;open my$f,'<','scripts/load-test-fixtures.pl'or die$!;my$s=<$f>;like$s,qr/KOHA_JZL_FIXTURES/,'explicit fixture switch';like$s,qr/KOHA_INSTANCE.*test/i,'test instance guard';like$s,qr/TEST-JZL-/,'isolated references';done_testing;

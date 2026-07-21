@@ -1,0 +1,1 @@
+package Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::LoanRepository; use Modern::Perl; use parent 'Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::Base'; sub new{shift->SUPER::new('loans')} 1;

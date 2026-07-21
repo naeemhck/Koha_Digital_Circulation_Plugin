@@ -1,0 +1,21 @@
+package Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::Base;
+use Modern::Perl; use C4::Context;
+my %SPEC=(
+ requests=>{id=>'request_id',table=>'plugin_jzl_ebook_requests r',select=>'r.*,b.title,bo.cardnumber,CONCAT_WS(" ",bo.firstname,bo.surname) patron_name',joins=>' LEFT JOIN biblio b ON b.biblionumber=r.biblio_id LEFT JOIN borrowers bo ON bo.borrowernumber=r.patron_id',filters=>{status=>'r.status',patron_id=>'r.patron_id',biblio_id=>'r.biblio_id',portal_request_id=>'r.portal_request_id'},dates=>{requested_from=>['r.requested_at','>='],requested_to=>['r.requested_at','<=']},sort=>{request_id=>'r.request_id',requested_at=>'r.requested_at',updated_at=>'r.updated_at',status=>'r.status'}},
+ loans=>{id=>'loan_id',table=>'plugin_jzl_ebook_loans l',select=>'l.*,b.title,bo.cardnumber,CONCAT_WS(" ",bo.firstname,bo.surname) patron_name',joins=>' LEFT JOIN biblio b ON b.biblionumber=l.biblio_id LEFT JOIN borrowers bo ON bo.borrowernumber=l.patron_id',filters=>{status=>'l.status',patron_id=>'l.patron_id',biblio_id=>'l.biblio_id'},dates=>{due_from=>['l.due_at','>='],due_to=>['l.due_at','<=']},sort=>{loan_id=>'l.loan_id',due_at=>'l.due_at',started_at=>'l.started_at',updated_at=>'l.updated_at',status=>'l.status'}},
+ renewals=>{id=>'renewal_id',table=>'plugin_jzl_ebook_renewals n',select=>'n.*,l.patron_id,l.biblio_id,b.title,bo.cardnumber,CONCAT_WS(" ",bo.firstname,bo.surname) patron_name',joins=>' JOIN plugin_jzl_ebook_loans l ON l.loan_id=n.loan_id LEFT JOIN biblio b ON b.biblionumber=l.biblio_id LEFT JOIN borrowers bo ON bo.borrowernumber=l.patron_id',filters=>{status=>'n.status',patron_id=>'l.patron_id',loan_id=>'n.loan_id'},dates=>{requested_from=>['n.requested_at','>='],requested_to=>['n.requested_at','<=']},sort=>{renewal_id=>'n.renewal_id',requested_at=>'n.requested_at',updated_at=>'n.updated_at',status=>'n.status'}},
+ events=>{id=>'event_id',table=>'plugin_jzl_ebook_events e',select=>'e.event_id,e.event_type,e.aggregate_type,e.aggregate_id,e.request_id,e.loan_id,e.renewal_id,e.patron_id,e.biblio_id,e.actor_patron_id,e.source,e.correlation_id,e.occurred_at,e.delivery_status,e.delivery_attempts,e.next_delivery_at,e.delivered_at,e.last_error_code,e.created_at',joins=>'',filters=>{event_type=>'e.event_type',aggregate_type=>'e.aggregate_type',aggregate_id=>'e.aggregate_id',request_id=>'e.request_id',loan_id=>'e.loan_id',delivery_status=>'e.delivery_status'},dates=>{occurred_from=>['e.occurred_at','>='],occurred_to=>['e.occurred_at','<=']},sort=>{event_id=>'e.event_id',occurred_at=>'e.occurred_at',event_type=>'e.event_type',delivery_status=>'e.delivery_status'}});
+sub new { bless {type=>$_[1]},$_[0] }
+sub _spec { $SPEC{$_[0]->{type}} or die 'INVALID_REPOSITORY' }
+sub get { my($self,$id)=@_; die 'INVALID_IDENTIFIER' unless defined$id&&$id=~/\A[1-9]\d*\z/; my$s=$self->_spec; return C4::Context->dbh->selectrow_hashref("SELECT $s->{select} FROM $s->{table}$s->{joins} WHERE ".substr($s->{table},-1).".$s->{id}=?",undef,$id) }
+sub list {
+ my($self,$q)=@_; my$s=$self->_spec; my(@where,@bind);
+ for my$k(keys%{$s->{filters}}){next unless defined$q->{$k}&&length$q->{$k}; die 'INVALID_FILTER' unless $q->{$k}=~/\A[A-Za-z0-9._:-]{1,128}\z/; push@where,"$s->{filters}{$k}=?";push@bind,$q->{$k}}
+ for my$k(keys%{$s->{dates}}){next unless defined$q->{$k}&&length$q->{$k};die'INVALID_FILTER'unless$q->{$k}=~/\A\d{4}-\d\d-\d\d(?:[ T]\d\d:\d\d(?::\d\d)?)?\z/;push@where,"$s->{dates}{$k}[0] $s->{dates}{$k}[1] ?";push@bind,$q->{$k}}
+ my$page=$q->{page}//1;my$pp=$q->{per_page}//20;die'INVALID_PAGINATION'unless$page=~/\A\d+\z/&&$page>=1&&$pp=~/\A\d+\z/&&$pp>=1&&$pp<=100;
+ my$sort=$q->{sort}//$s->{id};die'INVALID_FILTER'unless$s->{sort}{$sort};my$dir=lc($q->{direction}//'desc');die'INVALID_FILTER'unless$dir eq'asc'||$dir eq'desc';my$where=@where?' WHERE '.join(' AND ',@where):'';
+ my($total)=C4::Context->dbh->selectrow_array("SELECT COUNT(*) FROM $s->{table}$s->{joins}$where",undef,@bind);
+ my$sql="SELECT $s->{select} FROM $s->{table}$s->{joins}$where ORDER BY $s->{sort}{$sort} ".uc($dir).", ".substr($s->{table},-1).".$s->{id} ".uc($dir)." LIMIT ? OFFSET ?";
+ my$rows=C4::Context->dbh->selectall_arrayref($sql,{Slice=>{}},@bind,0+$pp,($page-1)*$pp);return($rows,0+$total,0+$page,0+$pp)
+}
+1;

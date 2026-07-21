@@ -1,0 +1,3 @@
+# Phase 2 plan
+
+After change approval and a tested cutover: add least-privilege portal service-account authorization; idempotent portal-only request creation; transactional staff approve/reject; loan creation only from approved portal requests; renewal request/decision; return/revoke; expiry scheduler; append-only audit/outbox events; signed callback delivery with retry/dead-letter observability; optimistic `row_version` checks; and portal reconciliation. Run dual-read/shadow comparison before authority transfer, freeze writes briefly, reconcile IDs/states, switch portal decisions to Koha, and retain a rollback window. Portal schema/API/removal and reader authorization are separate reviewed changes. No Phase 2 behavior is present now.
