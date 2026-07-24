@@ -1,10 +1,15 @@
 # Project Checkpoint — Phase 3A
 
+For full teammate onboarding, use
+[TEAMMATE_HANDOFF.md](TEAMMATE_HANDOFF.md).
+
 ## Repository
 - Branch: feature/phase2c-loan-issuance-foundation
 - Plugin version: 0.2.0
 - Schema version: 1
 - Plugin tables: 5
+- Source checkpoint commit: e19a669
+- Draft PR: https://github.com/naeemhck/Koha_Digital_Circulation_Plugin/pull/1
 
 ## Completed
 - Phase 2A portal request creation
@@ -19,10 +24,13 @@
 - RC7 live verification: passed
 
 ## RC7
+- Tag: v0.2.0-rc7
+- Release: https://github.com/naeemhck/Koha_Digital_Circulation_Plugin/releases/tag/v0.2.0-rc7
 - File: JunaidZaidiLibrary-DigitalCirculation-v0.2.0-rc7.kpz
 - Size: 66,120 bytes
 - SHA-256: 68e7c33f65d397c840e8de21e38bb6bc3ab9cd253af7667e3ed953aec4b4d92e
 - Members: 34
+- Note: KPZ binaries are release assets; they are not committed to Git
 
 ## Live State
 - Digital Circulation: 0.2.0 enabled
@@ -31,11 +39,13 @@
 - default_loan_duration_days: 14
 - Request 7: APPROVED
 - Loan 1: ACTIVE
+- Patron ID 50 / biblio ID 1
+- portal_request_id: 3e5e9b3c-6e6d-4219-ab4c-71a316c663b1
 - Renewals: 0
 - Native Koha issues: 0
 
 ## Remaining
-- Portal production enablement
+- Portal local live synchronization verification
 - Protected-reader entitlement
 - Return workflow
 - Renewal workflow

@@ -23,3 +23,12 @@ diagnostics/
 id_ed25519
 id_rsa
 *_secret*
+
+# Release packages (publish via GitHub Releases, not Git)
+dist/
+*.kpz
+
+# Coverage / test output
+coverage/
+test-results/
+prove_errors_*
