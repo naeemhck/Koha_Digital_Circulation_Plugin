@@ -1,0 +1,34 @@
+# Local / editor
+.cursor-tmp-*
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Python / tooling caches
+scripts/__pycache__/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Ephemeral local diagnostics and temp deploy helpers
+diagnostics/
+*.log
+
+# Secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+id_ed25519
+id_rsa
+*_secret*
+
+# Release packages (publish via GitHub Releases, not Git)
+dist/
+*.kpz
+
+# Coverage / test output
+coverage/
+test-results/
+prove_errors_*

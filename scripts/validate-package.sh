@@ -2,6 +2,11 @@
 set -eu
 KPZ=${1:?usage: validate-package.sh FILE.kpz}
 unzip -t "$KPZ"
-unzip -Z1 "$KPZ" | grep -Eq '^Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation\.pm$'
-if unzip -Z1 "$KPZ" | grep -E '(^|/)(\.git|node_modules|vendor|coverage|test-results|__pycache__)(/|$)|\.(env|db|sqlite|swp)$|~$'; then echo 'Forbidden package content' >&2; exit 1; fi
+python3 "$(dirname "$0")/validate_source.py" --kpz "$KPZ"
+BYTES=$(wc -c < "$KPZ" | tr -d ' ')
+MEMBERS=$(unzip -Z1 "$KPZ" | wc -l | tr -d ' ')
+SHA256=$(sha256sum "$KPZ" | awk '{print $1}')
+echo "Bytes: $BYTES"
+echo "Members: $MEMBERS"
+echo "SHA-256: $SHA256"
 echo 'Package validation passed'

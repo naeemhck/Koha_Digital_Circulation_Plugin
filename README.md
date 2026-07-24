@@ -1,9 +1,49 @@
 # Junaid Zaidi Library Digital eBook Circulation
 
-Version 0.1.0, schema 1, tested against Koha 26.05.01.000 (`koha-common` 26.05.01-1, MariaDB 10.11.18).
+Version **0.2.0**, schema **1**, tested against Koha **26.05.01.000**
+(`koha-common` 26.05.01-1, MariaDB 10.11.18).
 
-Phase 1 is a read-only foundation. The existing student portal remains operational and authoritative; this plugin makes no production access decision and exposes no mutation route or staff action. Koha becomes authoritative only after a controlled Phase 2 cutover. Standard holds, issues/checkouts, item availability, physical limits, fines, pickup notices, and overdue notices are intentionally not used. The model supports unlimited simultaneous readers of one biblio.
+Koha-authoritative plugin for protected institutional eBook requests, staff
+approval/rejection, digital-loan issuance, and portal-service loan reads.
+Native Koha physical issues remain untouched. Protected PDF bytes remain in
+EbookContent **0.1.2**.
 
-Build on Debian with `./build-kpz.sh`, inspect with `unzip -l dist/JunaidZaidiLibrary-DigitalCirculation-v0.1.0.kpz`, then follow `docs/INSTALLATION.md`. Normal uninstall preserves all plugin tables.
+## Developer Handoff
 
-The read API is `/api/v1/contrib/jzl-digital-circulation`; access uses Koha authentication plus the narrow existing `circulate_remaining_permissions` permission because Koha 26.05 has no clean plugin-owned permission registration facility.
+For cloning, architecture, REST contracts, RC7, safety rules, and the exact
+next implementation step, start here:
+
+**[docs/TEAMMATE_HANDOFF.md](docs/TEAMMATE_HANDOFF.md)**
+
+Also see:
+
+- [docs/PROJECT_CHECKPOINT_PHASE3A.md](docs/PROJECT_CHECKPOINT_PHASE3A.md)
+- [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
+- [docs/INSTALLATION.md](docs/INSTALLATION.md)
+- [docs/TESTING.md](docs/TESTING.md)
+
+## Branch and status
+
+- Feature branch: `feature/phase2c-loan-issuance-foundation`
+- Completed through Phase 3A portal loan-read API
+- RC7 prerelease:
+  https://github.com/naeemhck/Koha_Digital_Circulation_Plugin/releases/tag/v0.2.0-rc7
+
+## Build and install
+
+Build on Debian inside the instance environment with `./build-kpz.sh`, inspect
+with `unzip -l dist/JunaidZaidiLibrary-DigitalCirculation-v0.2.0.kpz`, then
+follow `docs/INSTALLATION.md`. On Windows, packaging validation uses
+`.\build-kpz.ps1` and `.\scripts\Validate-Source.ps1`.
+
+Normal uninstall preserves all plugin tables. KPZ files under `dist/` are
+release artifacts and are not committed.
+
+## API
+
+Namespace path: `/api/v1/contrib/jzl-digital-circulation`.
+
+Access uses Koha authentication plus the narrow existing
+`circulate_remaining_permissions` staff permission for staff routes. Portal
+service routes additionally require membership in
+`portal_service_account_ids`.
