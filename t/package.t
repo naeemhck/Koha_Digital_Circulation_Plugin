@@ -34,8 +34,12 @@ for my $runtime (
     "$bundle/Service/RequestDecisionService.pm",
     "$bundle/Service/RequestService.pm",
     "$bundle/Service/LoanIssuanceService.pm",
+    "$bundle/Service/ConfiguredLoanPeriodPolicy.pm",
     "$bundle/Service/StaffDecisionAuthorization.pm",
     "$bundle/Service/StaffRequestDecisionApplication.pm",
+    "$bundle/Service/StaffLoanIssuanceApplication.pm",
+    "$bundle/Service/PortalLoanReadApplication.pm",
+    "$bundle/Controller/Patrons.pm",
     "$bundle/Repository/LoanRepository.pm",
     "$bundle/static/css/jzl-digital-circulation.css",
     "$bundle/static/js/jzl-digital-circulation.js"
@@ -58,9 +62,54 @@ is_deeply(
     [
         'post /requests',
         'post /requests/{request_id}/decision',
+        'post /requests/{request_id}/issue',
     ],
-    'only request creation and staff request decision write routes exist'
+    'exactly three POST write routes exist including staff issuance'
 );
+is $api->{'/requests/{request_id}/issue'}{post}{operationId},
+    'jzlIssueDigitalLoan',
+    'issuance operation ID is packaged in OpenAPI';
+is $api->{'/patrons/{patron_id}/loans'}{get}{operationId},
+    'jzlListPatronDigitalLoans',
+    'portal loan-read operation ID is packaged in OpenAPI';
+ok -f "$root/$bundle/Service/StaffLoanIssuanceApplication.pm",
+    'StaffLoanIssuanceApplication remains packaged';
+ok -f "$root/$bundle/Service/ConfiguredLoanPeriodPolicy.pm",
+    'ConfiguredLoanPeriodPolicy remains packaged';
+ok -f "$root/$bundle/Service/PortalLoanReadApplication.pm",
+    'PortalLoanReadApplication is packaged';
+ok -f "$root/$bundle/Controller/Patrons.pm",
+    'Patrons controller is packaged';
+ok -f "$root/$bundle/Controller/Requests.pm",
+    'Requests controller remains packaged';
+open my $controller_fh, '<', "$root/$bundle/Controller/Requests.pm" or die $!;
+my $controller_source = do { local $/; <$controller_fh> };
+like $controller_source, qr/sub issue\b/,
+    'controller issue action is packaged';
+open my $patrons_fh, '<', "$root/$bundle/Controller/Patrons.pm" or die $!;
+my $patrons_source = do { local $/; <$patrons_fh> };
+like $patrons_source, qr/sub list_loans\b/,
+    'patrons controller exposes list_loans';
+like $patrons_source, qr/PortalLoanReadApplication/,
+    'patrons controller uses PortalLoanReadApplication';
+unlike $patrons_source, qr/StaffDecisionAuthorization/,
+    'patrons controller does not use staff authorization';
+ok !exists $api->{'/issue'},
+    'OpenAPI has no top-level /issue route';
+ok !exists $api->{'/access'} && !exists $api->{'/reader'},
+    'OpenAPI has no access or reader routes';
+ok !exists $api->{'/my-loans'} && !exists $api->{'/loans/sync'},
+    'OpenAPI has no portal sync convenience routes';
+my @forbidden_writes;
+for my $path ( sort keys %{$api} ) {
+    next unless $path =~ m{\A/(?:loans|renewals|access|reader|return|revoke)(?:/|\z)};
+    for my $method ( sort keys %{ $api->{$path} } ) {
+        push @forbidden_writes, "$method $path"
+            if $method =~ /\A(?:post|put|patch|delete)\z/i;
+    }
+}
+is_deeply \@forbidden_writes, [],
+    'OpenAPI has no loan, renewal, access, reader, return, or revoke write routes';
 ok exists $api->{'/assets/{asset}'}, 'asset route exists';
 like $source,
     qr{/api/v1/contrib/jzl-digital-circulation/assets/jzl-digital-circulation-css},
@@ -90,26 +139,32 @@ unlike $tool,
 unlike $tool,
     qr{/api/v1/contrib/jzl-digital-circulation/assets/jzl-digital-circulation\.css},
     'packaged staff template omits broken CSS asset URL';
-like $tool, qr/Phase 2B — request decisions/,
-    'packaged staff template describes Phase 2B decisions';
-like $tool, qr/does not create a loan or grant digital access/,
-    'packaged staff template states the no-loan boundary';
+like $tool, qr/Phase 2C — request decisions and loan issuance/,
+    'packaged staff template describes Phase 2C decisions and issuance';
+like $tool, qr/Approval alone does not create a loan/,
+    'packaged staff template states approval alone creates no loan';
 like $staff_js, qr/approve\.textContent = 'Approve'/,
     'packaged staff JavaScript provides Approve';
 like $staff_js, qr/reject\.textContent = 'Reject'/,
     'packaged staff JavaScript provides Reject';
+like $staff_js, qr/issue\.textContent = 'Issue Loan'/,
+    'packaged staff JavaScript provides Issue Loan';
 like $staff_js, qr/request\.status === 'PENDING'/,
-    'packaged staff controls are pending-only';
+    'packaged staff decision controls are pending-only';
+like $staff_js, qr/canIssueRequest\(request\)/,
+    'packaged staff issuance controls are eligibility-gated';
 like $staff_js, qr/method: 'POST'/,
-    'packaged staff decision uses POST';
+    'packaged staff writes use POST';
 like $staff_js, qr/credentials: 'same-origin'/,
-    'packaged staff decision uses same-origin credentials';
+    'packaged staff writes use same-origin credentials';
 like $staff_js, qr/'X-Correlation-ID': correlationId/,
-    'packaged staff decision sends correlation ID';
+    'packaged staff writes send correlation ID';
 like $staff_js, qr/expected_row_version: version/,
     'packaged staff decision uses row version';
+like $staff_js, qr{encodeURIComponent\(String\(id\)\) \+\s*'/issue'},
+    'packaged staff issuance uses the verified issue endpoint';
 unlike $tool . $staff_js,
-    qr/>\s*(?:Create|Delete|Return|Renew|Revoke|Edit|Issue)\s*</,
+    qr/>\s*(?:Create|Delete|Return|Renew|Revoke|Edit)\s*</,
     'packaged staff UI has no unrelated write control';
 unlike $staff_js, qr/\bAuthorization\b|\bBearer\b|\binnerHTML\b/,
     'packaged staff UI has no authorization header or unsafe HTML';

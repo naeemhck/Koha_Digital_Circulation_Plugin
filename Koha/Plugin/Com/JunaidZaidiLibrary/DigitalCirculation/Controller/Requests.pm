@@ -33,11 +33,31 @@ my %ERROR = (
     ],
     STAFF_NOT_AUTHORIZED => [
         403,
-        'The authenticated staff user is not authorized to decide digital requests.',
+        'The authenticated staff user is not authorized for this digital circulation action.',
     ],
     REQUEST_NOT_FOUND => [
         404,
         'The digital request was not found.',
+    ],
+    REQUEST_NOT_APPROVED => [
+        409,
+        'The digital request is not approved for issuance.',
+    ],
+    LOAN_ALREADY_EXISTS => [
+        409,
+        'A digital loan already exists for this request.',
+    ],
+    INVALID_MAPPING => [
+        409,
+        'Protected content mapping is not eligible for issuance.',
+    ],
+    PROTECTED_CONTENT_UNAVAILABLE => [
+        503,
+        'Protected content is temporarily unavailable.',
+    ],
+    INVALID_LOAN_PERIOD => [
+        503,
+        'Digital loan duration is not configured for issuance.',
     ],
     PATRON_NOT_FOUND => [
         404,
@@ -99,6 +119,17 @@ my @PUBLIC_STAFF_DECISION_FIELDS = qw(
     rejected_at
     rejected_by
     rejection_reason
+    row_version
+);
+
+my @PUBLIC_LOAN_FIELDS = qw(
+    loan_id
+    request_id
+    patron_id
+    biblio_id
+    status
+    started_at
+    due_at
     row_version
 );
 
@@ -226,6 +257,49 @@ sub decide {
     );
 }
 
+sub issue {
+    my ($c) = @_;
+    $c->res->headers->header( 'Cache-Control' => 'no-store' );
+
+    my $headers = $c->req->headers;
+    my $correlation_id = eval { $headers->header('X-Correlation-ID') };
+    return _render_error( $c, 'INVALID_INPUT' )
+        unless _uuid($correlation_id);
+
+    my $request_id = eval { $c->param('request_id') };
+    return _render_error( $c, 'INVALID_INPUT' )
+        unless _positive_decimal($request_id);
+
+    return _render_error( $c, 'INVALID_INPUT' )
+        if _issue_body_rejected($c);
+
+    my $application;
+    my $constructed = eval {
+        $application = $c->_staff_loan_issuance_application;
+        1;
+    };
+    return _render_error( $c, 'INTERNAL_ERROR' )
+        unless $constructed
+        && $application
+        && eval { $application->can('issue_loan') };
+
+    my $result;
+    my $invoked = eval {
+        $result = $application->issue_loan(
+            controller => $c,
+            request_id => 0 + $request_id,
+        );
+        1;
+    };
+    return _render_error( $c, 'INTERNAL_ERROR' ) unless $invoked;
+
+    return _render_issuance_result(
+        $c,
+        $result,
+        request_id => 0 + $request_id,
+    );
+}
+
 sub _portal_request_application {
     require Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation;
     require Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalRequestApplication;
@@ -244,6 +318,17 @@ sub _staff_request_decision_application {
     my $plugin =
         Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation->new;
     return Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::StaffRequestDecisionApplication->new(
+        plugin => $plugin
+    );
+}
+
+sub _staff_loan_issuance_application {
+    require Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation;
+    require Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::StaffLoanIssuanceApplication;
+
+    my $plugin =
+        Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation->new;
+    return Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::StaffLoanIssuanceApplication->new(
         plugin => $plugin
     );
 }
@@ -371,6 +456,101 @@ sub _valid_decision_body {
     return _positive_decimal( $body->{expected_row_version} )
         && defined $body->{decision}
         && !ref( $body->{decision} );
+}
+
+sub _issue_body_rejected {
+    my ($c) = @_;
+    my $raw;
+    my $raw_ok = eval {
+        $raw = $c->req->can('body') ? $c->req->body : undef;
+        1;
+    };
+    $raw = undef unless $raw_ok;
+    if ( !defined $raw || ( !ref($raw) && $raw =~ /\A\s*\z/ ) ) {
+        my $body;
+        my $parsed = eval {
+            $body = $c->req->json;
+            1;
+        };
+        return 0 unless $parsed && defined $body;
+        return 1 unless ref($body) eq 'HASH';
+        return keys %{$body} ? 1 : 0;
+    }
+
+    my $body;
+    my $parsed = eval {
+        $body = $c->req->json;
+        1;
+    };
+    return 1 unless $parsed;
+    return 1 unless ref($body) eq 'HASH';
+    return keys %{$body} ? 1 : 0;
+}
+
+sub _render_issuance_result {
+    my ( $c, $result, %expected ) = @_;
+    return _render_error( $c, 'INTERNAL_ERROR' )
+        unless ref($result) eq 'HASH'
+        && exists $result->{ok};
+
+    unless ( $result->{ok} ) {
+        my $code = $result->{code} // '';
+        return _render_error(
+            $c,
+            exists $ERROR{$code} ? $code : 'INTERNAL_ERROR'
+        );
+    }
+
+    my $loan = _public_loan( $result->{loan} );
+    return _render_error( $c, 'INTERNAL_ERROR' )
+        unless $loan
+        && $loan->{request_id} == $expected{request_id}
+        && ( $loan->{status} // '' ) eq 'ACTIVE';
+
+    return $c->render(
+        status => 201,
+        json   => $loan,
+    );
+}
+
+sub _public_loan {
+    my ($loan) = @_;
+    return unless ref($loan) eq 'HASH';
+    for my $field ( keys %{$loan} ) {
+        return unless grep { $_ eq $field } @PUBLIC_LOAN_FIELDS;
+    }
+    for my $field (@PUBLIC_LOAN_FIELDS) {
+        return unless exists $loan->{$field};
+        return if defined $loan->{$field} && ref( $loan->{$field} );
+    }
+
+    return unless _positive_decimal( $loan->{loan_id} )
+        && _positive_decimal( $loan->{request_id} )
+        && _positive_decimal( $loan->{patron_id} )
+        && _positive_decimal( $loan->{biblio_id} )
+        && ( $loan->{status} // '' ) eq 'ACTIVE'
+        && _timestamp( $loan->{started_at} )
+        && _timestamp( $loan->{due_at} )
+        && $loan->{due_at} gt $loan->{started_at}
+        && _positive_decimal( $loan->{row_version} );
+
+    return {
+        loan_id     => 0 + $loan->{loan_id},
+        request_id  => 0 + $loan->{request_id},
+        patron_id   => 0 + $loan->{patron_id},
+        biblio_id   => 0 + $loan->{biblio_id},
+        status      => 'ACTIVE',
+        started_at  => $loan->{started_at},
+        due_at      => $loan->{due_at},
+        row_version => 0 + $loan->{row_version},
+    };
+}
+
+sub _timestamp {
+    my ($value) = @_;
+    return defined $value
+        && !ref($value)
+        && $value =~ /\A\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\z/;
 }
 
 sub _public_request {

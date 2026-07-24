@@ -147,5 +147,7 @@ portal authentication boundary can restore a portal-only permission posture.
 
 ## Future work
 
-Approved-request loan issuance is a separate future unit. It must not be
-inferred from, or added to, this request-decision interface.
+Approved-request loan issuance is available through the controlled REST
+endpoint and Issue Loan staff UI documented in
+`docs/PHASE2C_STAFF_LOAN_ISSUANCE_UI.md`. Automatic issuance during approval
+must not be inferred from, or added to, this request-decision interface.

@@ -27,13 +27,15 @@ for (
     'Expired Loans',
     'Revoked Loans',
     'Audit Events',
-    'Phase 2B — request decisions'
+    'Phase 2C — request decisions and loan issuance'
 ) {
     like $tool, qr/\Q$_\E/, $_;
 }
 
-like $tool, qr/does not create a loan or grant digital access/,
-    'staff page states the no-loan boundary';
+like $tool, qr/Approval alone does not create a loan/,
+    'staff page states approval alone creates no loan';
+like $tool, qr/does not grant protected-PDF reader access/,
+    'staff page states issuance does not grant reader access';
 like $tool, qr/<dialog\b[^>]*id="jzl-reject-dialog"/,
     'staff page has a rejection dialog';
 like $tool, qr/<textarea\b[^>]*maxlength="4096"[^>]*required/,
@@ -70,14 +72,18 @@ unlike $js, qr/\binnerHTML\b|\beval\s*\(|setTimeout\s*\(\s*['"]/,
 unlike $js, qr{https?://|192\.168\.|/var/lib/koha|[A-Za-z]:\\},
     'staff UI has no remote host or filesystem path';
 unlike $tool . $js,
-    qr/>\s*(?:Renew|Return|Revoke|Delete|Modify|Edit|Create|Issue)\s*</,
+    qr/>\s*(?:Renew|Return|Revoke|Delete|Modify|Edit|Create)\s*</,
     'no unrelated staff write control exists';
+like $js, qr/issue\.textContent = 'Issue Loan'/,
+    'staff UI exposes Issue Loan for eligible approved requests';
 my @write_methods = $js =~ /method:\s*'([^']+)'/g;
-is_deeply \@write_methods, ['POST'],
-    'the decision POST is the only staff UI write request';
+is_deeply \@write_methods, [ 'POST', 'POST' ],
+    'staff UI write requests are exactly decision and issuance POSTs';
 unlike $js,
-    qr/\b(?:createLoan|issueLoan|createRenewal|grantAccess|grantEntitlement|activateReader)\b/i,
-    'staff decision UI creates no loan, renewal, entitlement, or reader state';
+    qr/\b(?:createRenewal|grantAccess|grantEntitlement|activateReader)\b/i,
+    'staff UI creates no renewal, entitlement, or reader state';
+like $js, qr/submitIssuance\(/,
+    'staff issuance goes through the dedicated issuance submit helper';
 
 like $main,
     qr/haspermission\(\s*\$userenv->\{id\},\s*\{\s*circulate\s*=>\s*'circulate_remaining_permissions'/s,

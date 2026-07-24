@@ -33,19 +33,23 @@ $zip->close;
 
 open my $manifest_fh, '<', 'MANIFEST' or die $!;
 my @manifest = sort grep { length } map { chomp; $_ } <$manifest_fh>;
-my @phase2b_runtime = (
+my @post_rc1_runtime = (
     "$bundle/Service/RequestDecisionService.pm",
     "$bundle/Service/StaffDecisionAuthorization.pm",
     "$bundle/Service/StaffRequestDecisionApplication.pm",
     "$bundle/Service/LoanIssuanceService.pm",
+    "$bundle/Service/ConfiguredLoanPeriodPolicy.pm",
+    "$bundle/Service/StaffLoanIssuanceApplication.pm",
+    "$bundle/Service/PortalLoanReadApplication.pm",
+    "$bundle/Controller/Patrons.pm",
 );
-my %phase2b_runtime = map { $_ => 1 } @phase2b_runtime;
-my @phase2a_manifest = grep { !$phase2b_runtime{$_} } @manifest;
+my %post_rc1_runtime = map { $_ => 1 } @post_rc1_runtime;
+my @phase2a_manifest = grep { !$post_rc1_runtime{$_} } @manifest;
 is_deeply [ sort keys %members ], \@phase2a_manifest,
     'frozen Phase 2A archive membership matches the pre-Phase-2B manifest';
-for my $phase2b_member (@phase2b_runtime) {
-    ok !exists $members{$phase2b_member},
-        "frozen Phase 2A archive excludes $phase2b_member";
+for my $later_member (@post_rc1_runtime) {
+    ok !exists $members{$later_member},
+        "frozen Phase 2A archive excludes $later_member";
 }
 
 for my $required (

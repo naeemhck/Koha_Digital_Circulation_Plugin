@@ -759,8 +759,12 @@ my $api = JSON::PP::decode_json( do { local $/; <$api_fh> } );
 my @posts =
     sort map { exists $api->{$_}{post} ? $_ : () } keys %{$api};
 is_deeply \@posts,
-    [ '/requests', '/requests/{request_id}/decision' ],
-    'OpenAPI exposes only request creation and staff decision POST routes';
+    [
+        '/requests',
+        '/requests/{request_id}/decision',
+        '/requests/{request_id}/issue',
+    ],
+    'OpenAPI exposes request creation, staff decision, and staff issuance POST routes';
 
 open my $tool_fh, '<',
     'Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/tool.tt'
@@ -770,12 +774,14 @@ open my $staff_js_fh, '<',
     'Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/static/js/jzl-digital-circulation.js'
     or die $!;
 my $staff_js = do { local $/; <$staff_js_fh> };
-like $tool, qr/Phase 2B .* request decisions/,
-    'staff tool identifies the Phase 2B decision-only scope';
+like $tool, qr/Phase 2C .* request decisions and loan issuance/,
+    'staff tool identifies the Phase 2C decision and issuance scope';
 like $staff_js, qr/request\.status === 'PENDING'/,
     'staff decision controls are pending-only';
+like $staff_js, qr/issue\.textContent = 'Issue Loan'/,
+    'staff issuance control is present for eligible approved requests';
 unlike $tool . $staff_js,
-    qr/>\s*(?:Renew|Return|Revoke|Delete|Modify|Edit|Create|Issue)\s*</,
+    qr/>\s*(?:Renew|Return|Revoke|Delete|Modify|Edit|Create)\s*</,
     'staff tool has no unrelated write controls';
 
 open my $schema_fh, '<',

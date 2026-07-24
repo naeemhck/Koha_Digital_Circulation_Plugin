@@ -1,18 +1,24 @@
 #jzl_digital_circulation .jzl-tab{background:none;border:0;padding:.8rem 1rem}
 #jzl_digital_circulation .jzl-tab:focus,
 #jzl_digital_circulation .jzl-decision-actions button:focus,
+#jzl_digital_circulation .jzl-issue-actions button:focus,
 #jzl_digital_circulation #jzl-reject-dialog button:focus,
 #jzl_digital_circulation #jzl-reject-dialog textarea:focus{outline:3px solid #1a73e8;outline-offset:2px}
 #jzl_digital_circulation .jzl-tab[aria-selected=true]{font-weight:700;border-bottom:3px solid #1b5e20}
 #jzl_digital_circulation th,#jzl_digital_circulation td{white-space:nowrap;vertical-align:top}
 #jzl_digital_circulation .jzl-rejection-reason{max-width:28rem;white-space:pre-wrap;word-break:break-word}
-#jzl_digital_circulation .jzl-decision-actions{display:flex;align-items:center;gap:.5rem}
-#jzl_digital_circulation .jzl-decision-progress{font-weight:600}
+#jzl_digital_circulation .jzl-decision-actions,
+#jzl_digital_circulation .jzl-issue-actions{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+#jzl_digital_circulation .jzl-decision-progress,
+#jzl_digital_circulation .jzl-issue-progress{font-weight:600}
+#jzl_digital_circulation .jzl-loan-summary{max-width:22rem;white-space:normal}
+#jzl_digital_circulation .jzl-loan-summary-title{font-weight:700;display:block}
 #jzl_digital_circulation .jzl-status-badge{display:inline-block;border:1px solid #666;border-radius:.25rem;padding:.2rem .45rem;font-weight:700}
 #jzl_digital_circulation .jzl-status-pending{background:#fff3cd;color:#594400}
 #jzl_digital_circulation .jzl-status-approved{background:#d9ead3;color:#234d20}
 #jzl_digital_circulation .jzl-status-rejected{background:#f4cccc;color:#681414}
 #jzl_digital_circulation .jzl-status-cancelled{background:#e2e3e5;color:#383d41}
+#jzl_digital_circulation .jzl-status-active{background:#cfe2ff;color:#084298}
 #jzl_digital_circulation #jzl-reject-dialog{width:min(36rem,calc(100% - 2rem));border:1px solid #777;border-radius:.25rem;padding:1.5rem}
 #jzl_digital_circulation #jzl-reject-dialog::backdrop{background:rgba(0,0,0,.45)}
 #jzl_digital_circulation .jzl-dialog-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem}

@@ -39,7 +39,8 @@ is_deeply(
     [
         'post /requests',
         'post /requests/{request_id}/decision',
+        'post /requests/{request_id}/issue',
     ],
-    'only request creation and staff request decision are mutation routes'
+    'only request creation, staff decision, and staff issuance are mutation routes'
 );
 done_testing;

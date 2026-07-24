@@ -10,8 +10,12 @@ my $api = JSON::PP::decode_json( do { local $/; <$fh> } );
 my @post_routes =
     sort map { exists $api->{$_}{post} ? $_ : () } keys %{$api};
 is_deeply \@post_routes,
-    [ '/requests', '/requests/{request_id}/decision' ],
-    'exactly the two approved POST routes exist';
+    [
+        '/requests',
+        '/requests/{request_id}/decision',
+        '/requests/{request_id}/issue',
+    ],
+    'exactly the three approved POST routes exist';
 
 my $creation = $api->{'/requests'}{post};
 ok $creation, 'portal request-creation route remains';
@@ -167,8 +171,8 @@ open my $staff_js_fh, '<',
     'Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/static/js/jzl-digital-circulation.js'
     or die $!;
 my $staff_js = do { local $/; <$staff_js_fh> };
-like $tool, qr/Phase 2B .* request decisions/,
-    'staff tool exposes the Phase 2B request-decision interface';
+like $tool, qr/Phase 2C .* request decisions and loan issuance/,
+    'staff tool exposes the Phase 2C request-decision and issuance interface';
 like $staff_js, qr/approve\.textContent = 'Approve'/,
     'staff tool provides Approve through the packaged script';
 like $staff_js, qr/reject\.textContent = 'Reject'/,

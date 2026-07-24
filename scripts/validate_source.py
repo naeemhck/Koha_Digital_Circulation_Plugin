@@ -165,13 +165,17 @@ def check_source() -> None:
         f"{BUNDLE_MANIFEST}/Service/EbookContentEligibility.pm",
         f"{BUNDLE_MANIFEST}/Service/PortalServiceAuthorization.pm",
         f"{BUNDLE_MANIFEST}/Service/PortalRequestApplication.pm",
+        f"{BUNDLE_MANIFEST}/Service/PortalLoanReadApplication.pm",
+        f"{BUNDLE_MANIFEST}/Controller/Patrons.pm",
         f"{BUNDLE_MANIFEST}/Repository/RequestRepository.pm",
         f"{BUNDLE_MANIFEST}/Repository/EventRepository.pm",
         f"{BUNDLE_MANIFEST}/Service/RequestDecisionService.pm",
         f"{BUNDLE_MANIFEST}/Service/RequestService.pm",
         f"{BUNDLE_MANIFEST}/Service/LoanIssuanceService.pm",
+        f"{BUNDLE_MANIFEST}/Service/ConfiguredLoanPeriodPolicy.pm",
         f"{BUNDLE_MANIFEST}/Service/StaffDecisionAuthorization.pm",
         f"{BUNDLE_MANIFEST}/Service/StaffRequestDecisionApplication.pm",
+        f"{BUNDLE_MANIFEST}/Service/StaffLoanIssuanceApplication.pm",
         f"{BUNDLE_MANIFEST}/Repository/LoanRepository.pm",
         f"{BUNDLE_MANIFEST}/static/css/jzl-digital-circulation.css",
         f"{BUNDLE_MANIFEST}/static/js/jzl-digital-circulation.js",
@@ -184,9 +188,10 @@ def check_source() -> None:
     ).read_text(encoding="utf-8")
     staff_ui = tool + "\n" + staff_js
     require(
-        "Phase 2B — request decisions" in tool
-        and "does not create a loan or grant digital access" in tool,
-        "staff tool states the Phase 2B decision-only boundary",
+        "Phase 2C — request decisions and loan issuance" in tool
+        and "Approval alone does not create a loan" in tool
+        and "does not grant protected-PDF reader access" in tool,
+        "staff tool states the Phase 2C decision and issuance boundary",
     )
     require(
         "approve.textContent = 'Approve'" in staff_js
@@ -195,32 +200,51 @@ def check_source() -> None:
         "staff tool exposes Approve and Reject only for pending requests",
     )
     require(
+        "issue.textContent = 'Issue Loan'" in staff_js
+        and "canIssueRequest(request)" in staff_js
+        and "loanPresence(request) === 'absent'" in staff_js
+        and "request.status === 'APPROVED'" in staff_js,
+        "Issue Loan appears only for APPROVED requests without a loan",
+    )
+    require(
         "DECISION_PATH = '/requests/'" in staff_js
         and "'/decision'" in staff_js
+        and "ISSUE_PATH = '/requests/'" in staff_js
+        and "'/issue'" in staff_js
         and "method: 'POST'" in staff_js
         and "credentials: 'same-origin'" in staff_js,
-        "staff decisions use only the same-origin verified REST endpoint",
+        "staff decisions and issuance use only the same-origin verified REST endpoints",
     )
     require(
         "'X-Correlation-ID': correlationId" in staff_js
         and "expected_row_version: version" in staff_js
         and "window.crypto.randomUUID()" in staff_js
-        and "window.crypto.getRandomValues(bytes)" in staff_js,
-        "staff decisions use a fresh secure correlation UUID and row version",
+        and "window.crypto.getRandomValues(bytes)" in staff_js
+        and "submitIssuance" in staff_js,
+        "staff writes use a fresh secure correlation UUID and dedicated issuance submit helper",
     )
     require(
         "innerHTML" not in staff_js
         and "Authorization" not in staff_js
-        and "portal_service_account_ids" not in staff_ui,
-        "staff UI contains no unsafe HTML, authorization header, or portal allowlist",
+        and "portal_service_account_ids" not in staff_ui
+        and "grantAccess" not in staff_js
+        and "activateReader" not in staff_js,
+        "staff UI contains no unsafe HTML, authorization header, portal allowlist, or reader access",
     )
-    for control in ("Create", "Delete", "Return", "Renew", "Revoke", "Edit", "Issue"):
+    for control in ("Create", "Delete", "Return", "Renew", "Revoke", "Edit"):
         require(
             re.search(rf">\s*{control}(?: Request)?\s*<", tool) is None
             and re.search(rf"\.textContent\s*=\s*['\"]{control}(?: Request)?['\"]", staff_js)
             is None,
             f"staff tool has no {control} write control",
         )
+    base_repo = (ROOT / BUNDLE / "Repository" / "Base.pm").read_text(encoding="utf-8")
+    require(
+        "LEFT JOIN plugin_jzl_ebook_loans l ON l.request_id=r.request_id" in base_repo
+        and "l.loan_id AS loan_id" in base_repo
+        and "l.status AS loan_status" in base_repo,
+        "request read model left-joins a safe loan summary",
+    )
 
     portal_auth = (ROOT / BUNDLE / "Service" / "PortalServiceAuthorization.pm").read_text(encoding="utf-8")
     require("CONFIG_KEY => 'portal_service_account_ids'" in portal_auth, "portal service allowlist has one stable configuration key")
@@ -404,6 +428,49 @@ def check_source() -> None:
         "approval decision service remains unwired from loan issuance",
     )
 
+    loan_period_policy = (
+        ROOT / BUNDLE / "Service" / "ConfiguredLoanPeriodPolicy.pm"
+    ).read_text(encoding="utf-8")
+    require(
+        "CONFIG_KEY => 'default_loan_duration_days'" in loan_period_policy
+        and "MIN_DAYS   => 1" in loan_period_policy
+        and "MAX_DAYS   => 365" in loan_period_policy
+        and "sub resolve_due_at" in loan_period_policy,
+        "configured production loan policy exists with validated duration range",
+    )
+    require(
+        "loan_duration_missing" in loan_period_policy
+        and "INVALID_LOAN_PERIOD" in loan_period_policy,
+        "blank configuration fails closed as INVALID_LOAN_PERIOD",
+    )
+    require(
+        "due_at" in loan_period_policy
+        and "duration_seconds" not in loan_period_policy,
+        "configured policy returns due_at and does not invent duration_seconds",
+    )
+    require(
+        "_build_loan_issuance_service" in source
+        and "ConfiguredLoanPeriodPolicy" in source,
+        "LoanIssuanceService production wiring receives the configured policy",
+    )
+    require(
+        "default_loan_duration_days" in (
+            ROOT / BUNDLE / "configure.tt"
+        ).read_text(encoding="utf-8")
+        and "Default digital loan duration (days)"
+        in (ROOT / BUNDLE / "configure.tt").read_text(encoding="utf-8"),
+        "configure page exposes the loan duration setting",
+    )
+    require(
+        not re.search(
+            r"\b(?:AddIssue|GetIssue)\b|reader[_-]?token|entitlement|byte-range|"
+            r"\bstatus\s*=>\s*\d{3}\b|\brender\s*\(",
+            loan_period_policy,
+            re.I,
+        ),
+        "loan period policy contains no HTTP, native issue, or reader-access behavior",
+    )
+
     staff_authorization = (
         ROOT / BUNDLE / "Service" / "StaffDecisionAuthorization.pm"
     ).read_text(encoding="utf-8")
@@ -470,6 +537,60 @@ def check_source() -> None:
         "staff decision application contains no SQL, transaction, HTTP, loan, or renewal work",
     )
 
+    staff_loan_issuance_application = (
+        ROOT / BUNDLE / "Service" / "StaffLoanIssuanceApplication.pm"
+    ).read_text(encoding="utf-8")
+    require(
+        "sub issue_loan" in staff_loan_issuance_application
+        and "StaffDecisionAuthorization" in staff_loan_issuance_application
+        and "LoanIssuanceService" in staff_loan_issuance_application,
+        "StaffLoanIssuanceApplication exists with staff authorization and issuance delegation",
+    )
+    require(
+        "StaffDecisionAuthorization->new(\n                plugin => $args{plugin}"
+        in staff_loan_issuance_application,
+        "staff loan issuance application supplies plugin configuration to authorization",
+    )
+    issue_loan = re.search(
+        r"sub issue_loan \{.*?\n\}",
+        staff_loan_issuance_application,
+        re.DOTALL,
+    )
+    require(issue_loan is not None, "staff loan issuance application exposes internal issue_loan")
+    issuance_flow = issue_loan.group()
+    require(
+        issuance_flow.index("_authorize")
+        < issuance_flow.index("_validate_command")
+        < issuance_flow.index("issuance_service")
+        < issuance_flow.index("_normalize_result"),
+        "staff loan issuance application preserves authorization-first orchestration order",
+    )
+    require(
+        "request_id => $command->{request_id}" in staff_loan_issuance_application
+        and "actor_id   => $actor_id" in staff_loan_issuance_application,
+        "LoanIssuanceService receives trusted actor and validated request ID only",
+    )
+    require(
+        "PortalServiceAuthorization" not in staff_loan_issuance_application,
+        "staff loan issuance application has no portal authorization dependency",
+    )
+    require(
+        "ALLOWED_COMMAND_KEYS" in staff_loan_issuance_application
+        and "INVALID_INPUT" in staff_loan_issuance_application,
+        "staff loan issuance command rejects caller authority fields",
+    )
+    require(
+        not re.search(
+            r"\b(?:SELECT|INSERT|UPDATE|DELETE)\b|\b(?:begin_work|commit|rollback)\b|"
+            r"\bstatus\s*=>\s*\d{3}\b|\brender\s*\(|"
+            r"\b(?:AddIssue|GetIssue)\b|reader[_-]?token|entitlement|byte-range|"
+            r"plugin_jzl_ebook_(?:loans|renewals)|\b(?:issues|old_issues|reserves|items)\b",
+            staff_loan_issuance_application,
+            re.I,
+        ),
+        "staff loan issuance application contains no SQL, HTTP, native issue, or reader-access behavior",
+    )
+
     request_application = (ROOT / BUNDLE / "Service" / "PortalRequestApplication.pm").read_text(encoding="utf-8")
     create_request = re.search(r"sub create_request \{.*?\n\}", request_application, re.DOTALL)
     require(create_request is not None, "portal request application exposes internal create_request")
@@ -509,8 +630,148 @@ def check_source() -> None:
         == [
             "post /requests",
             "post /requests/{request_id}/decision",
+            "post /requests/{request_id}/issue",
         ],
-        "source OpenAPI has only request creation and staff decision POST routes",
+        "source OpenAPI has exactly three POST routes including staff issuance",
+    )
+    portal_loan_get = openapi.get("/patrons/{patron_id}/loans", {}).get("get")
+    require(
+        isinstance(portal_loan_get, dict)
+        and portal_loan_get.get("operationId") == "jzlListPatronDigitalLoans"
+        and portal_loan_get.get("x-mojo-to")
+        == "Com::JunaidZaidiLibrary::DigitalCirculation::Controller::Patrons#list_loans",
+        "portal loan-read OpenAPI route and controller operation agree",
+    )
+    portal_loan_parameters = {
+        (parameter.get("in"), parameter.get("name")): parameter
+        for parameter in portal_loan_get.get("parameters", [])
+    }
+    require(
+        portal_loan_parameters.get(("path", "patron_id"), {}).get("required")
+        and portal_loan_parameters.get(("header", "X-Correlation-ID"), {}).get(
+            "required"
+        )
+        and ("query", "status") not in portal_loan_parameters,
+        "portal loan-read requires path patron_id and correlation UUID without status filter",
+    )
+    portal_loan_schema = (
+        portal_loan_get.get("responses", {}).get("200", {}).get("schema", {})
+    )
+    require(
+        portal_loan_schema.get("additionalProperties") is False
+        and set(portal_loan_schema.get("required", [])) == {"loans", "pagination"}
+        and "portal_request_id"
+        in portal_loan_schema.get("properties", {})
+        .get("loans", {})
+        .get("items", {})
+        .get("properties", {})
+        and "portal_ebook_uuid"
+        not in portal_loan_schema.get("properties", {})
+        .get("loans", {})
+        .get("items", {})
+        .get("properties", {})
+        and "approved_by"
+        not in portal_loan_schema.get("properties", {})
+        .get("loans", {})
+        .get("items", {})
+        .get("properties", {}),
+        "portal loan-read schema uses portal_request_id and forbids ebook UUID/approved_by",
+    )
+    require(
+        set(portal_loan_get.get("responses", {}))
+        == {"200", "400", "401", "403", "500", "503"},
+        "portal loan-read response statuses are complete",
+    )
+    portal_loan_application = (
+        ROOT / BUNDLE / "Service" / "PortalLoanReadApplication.pm"
+    ).read_text(encoding="utf-8")
+    patrons_controller = (
+        ROOT / BUNDLE / "Controller" / "Patrons.pm"
+    ).read_text(encoding="utf-8")
+    loan_repository = (
+        ROOT / BUNDLE / "Repository" / "LoanRepository.pm"
+    ).read_text(encoding="utf-8")
+    require(
+        "PortalServiceAuthorization" in portal_loan_application
+        and "StaffDecisionAuthorization" not in portal_loan_application
+        and "sub list_patron_loans" in portal_loan_application
+        and "list_for_patron" in portal_loan_application
+        and "portal_ebook_uuid" not in portal_loan_application,
+        "PortalLoanReadApplication uses portal authorization and repository list_for_patron",
+    )
+    public_fields_match = re.search(
+        r"my @PUBLIC_LOAN_FIELDS = qw\((.*?)\);",
+        portal_loan_application,
+        re.S,
+    )
+    require(public_fields_match is not None, "portal loan public field allowlist exists")
+    public_fields = public_fields_match.group(1)
+    require(
+        "portal_request_id" in public_fields
+        and "approved_by" not in public_fields
+        and "portal_ebook_uuid" not in public_fields,
+        "portal loan public fields include portal_request_id and exclude approved_by/ebook UUID",
+    )
+    require(
+        "sub list_loans" in patrons_controller
+        and "PortalLoanReadApplication" in patrons_controller
+        and "StaffDecisionAuthorization" not in patrons_controller
+        and "X-Correlation-ID" in patrons_controller
+        and "selectrow" not in patrons_controller
+        and "INSERT" not in patrons_controller,
+        "patrons controller is a thin read adapter without SQL writes",
+    )
+    list_for_patron_body = loan_repository.split("sub list_for_patron", 1)[-1]
+    list_for_patron_body = re.split(
+        r"\nsub [a-zA-Z_]", list_for_patron_body, maxsplit=1
+    )[0]
+    require(
+        "INNER JOIN" in list_for_patron_body
+        and "portal_request_id" in list_for_patron_body
+        and "borrowers" not in list_for_patron_body
+        and "FOR UPDATE" not in list_for_patron_body
+        and not re.search(r"\b(?:INSERT|UPDATE|DELETE)\b", list_for_patron_body),
+        "list_for_patron joins requests without borrower PII or writes",
+    )
+    require(
+        "portal_ebook_uuid" not in json.dumps(portal_loan_get),
+        "portal loan-read OpenAPI omits portal_ebook_uuid",
+    )
+    issue_post = openapi.get("/requests/{request_id}/issue", {}).get("post")
+    require(
+        isinstance(issue_post, dict)
+        and issue_post.get("operationId") == "jzlIssueDigitalLoan"
+        and issue_post.get("x-mojo-to")
+        == "Com::JunaidZaidiLibrary::DigitalCirculation::Controller::Requests#issue",
+        "staff issuance OpenAPI route and controller operation agree",
+    )
+    require(
+        issue_post.get("x-koha-authorization", {}).get("permissions")
+        == {"circulate": "circulate_remaining_permissions"},
+        "staff issuance route declares established Koha permission",
+    )
+    issue_parameters = {
+        (parameter.get("in"), parameter.get("name")): parameter
+        for parameter in issue_post.get("parameters", [])
+    }
+    require(
+        issue_parameters.get(("path", "request_id"), {}).get("required")
+        and issue_parameters.get(("header", "X-Correlation-ID"), {}).get("required")
+        and ("body", "body") not in issue_parameters,
+        "staff issuance requires path and correlation header and no body",
+    )
+    require(
+        set(issue_post.get("responses", {}))
+        == {"201", "400", "401", "403", "404", "409", "500", "503"},
+        "staff issuance response statuses are complete",
+    )
+    require(
+        issue_post.get("responses", {})
+        .get("201", {})
+        .get("schema", {})
+        .get("additionalProperties")
+        is False,
+        "staff issuance success schema forbids additional properties",
     )
     decision_post = openapi.get("/requests/{request_id}/decision", {}).get("post")
     require(
@@ -563,14 +824,54 @@ def check_source() -> None:
         "request controller exposes decision application adapter",
     )
     require(
+        "sub issue" in request_controller
+        and "_staff_loan_issuance_application" in request_controller
+        and "StaffLoanIssuanceApplication->new" in request_controller
+        and "issue_loan" in request_controller,
+        "request controller exposes staff loan issuance application adapter",
+    )
+    issue_action = re.search(
+        r"sub issue \{.*?\nsub ",
+        request_controller,
+        re.DOTALL,
+    )
+    require(issue_action is not None, "issuance controller action body is extractable")
+    issue_body = issue_action.group()
+    require(
+        "X-Correlation-ID" in issue_body
+        and "_uuid($correlation_id)" in issue_body
+        and "_issue_body_rejected" in issue_body
+        and "_staff_loan_issuance_application" in issue_body,
+        "issuance action requires correlation UUID and rejects authority-bearing bodies",
+    )
+    require(
+        all(
+            token not in issue_body
+            for token in (
+                "patron_id =>",
+                "biblio_id =>",
+                "due_at =>",
+                "actor_id =>",
+                "duration",
+            )
+        ),
+        "issuance controller does not accept caller patron, biblio, due date, or actor fields",
+    )
+    require(
+        "@PUBLIC_LOAN_FIELDS" in request_controller
+        and "_public_loan" in request_controller,
+        "issuance controller enforces a safe response-field allowlist",
+    )
+    require(
         not re.search(
             r"\b(?:begin_work|commit|rollback|haspermission)\b|"
             r"PortalServiceAuthorization|portal_service_account_ids|"
-            r"INSERT\s+INTO\s+`?plugin_jzl_ebook_(?:loans|renewals)",
+            r"INSERT\s+INTO\s+`?plugin_jzl_ebook_(?:loans|renewals)|"
+            r"\b(?:AddIssue|GetIssue)\b|reader[_-]?token|entitlement",
             request_controller,
             re.I,
         ),
-        "request controller contains no transaction, permission, portal, loan, or renewal work",
+        "request controller contains no transaction, permission, portal SQL, native issue, or reader-access work",
     )
     require("/assets/{asset}" in openapi, "OpenAPI asset route exists")
     require(
@@ -662,8 +963,18 @@ def check_archive(path: pathlib.Path) -> None:
             path for path, path_item in packaged_openapi.items() if "post" in path_item
         )
         require(
-            post_routes == ["/requests", "/requests/{request_id}/decision"],
-            "packaged OpenAPI has exactly the request creation and staff decision POST routes",
+            post_routes
+            == [
+                "/requests",
+                "/requests/{request_id}/decision",
+                "/requests/{request_id}/issue",
+            ],
+            "packaged OpenAPI has exactly three POST routes including staff issuance",
+        )
+        require(
+            packaged_openapi["/requests/{request_id}/issue"]["post"].get("operationId")
+            == "jzlIssueDigitalLoan",
+            "packaged issuance operation ID is correct",
         )
         post = packaged_openapi["/requests"]["post"]
         require(
@@ -704,9 +1015,10 @@ def check_archive(path: pathlib.Path) -> None:
         ).decode("utf-8")
         packaged_staff_ui = tool + "\n" + packaged_staff_js
         require(
-            "Phase 2B — request decisions" in tool
-            and "does not create a loan or grant digital access" in tool,
-            "packaged staff tool states the Phase 2B decision-only boundary",
+            "Phase 2C — request decisions and loan issuance" in tool
+            and "Approval alone does not create a loan" in tool
+            and "does not grant protected-PDF reader access" in tool,
+            "packaged staff tool states the Phase 2C decision and issuance boundary",
         )
         require(
             "approve.textContent = 'Approve'" in packaged_staff_js
@@ -715,26 +1027,36 @@ def check_archive(path: pathlib.Path) -> None:
             "packaged staff tool exposes Approve and Reject only for pending requests",
         )
         require(
+            "issue.textContent = 'Issue Loan'" in packaged_staff_js
+            and "canIssueRequest(request)" in packaged_staff_js
+            and "'/issue'" in packaged_staff_js
+            and "submitIssuance" in packaged_staff_js,
+            "packaged staff tool exposes Issue Loan for eligible approved requests",
+        )
+        require(
             "DECISION_PATH = '/requests/'" in packaged_staff_js
             and "'/decision'" in packaged_staff_js
+            and "ISSUE_PATH = '/requests/'" in packaged_staff_js
             and "method: 'POST'" in packaged_staff_js
             and "credentials: 'same-origin'" in packaged_staff_js,
-            "packaged staff decisions use only the same-origin verified REST endpoint",
+            "packaged staff decisions and issuance use only the same-origin verified REST endpoints",
         )
         require(
             "'X-Correlation-ID': correlationId" in packaged_staff_js
             and "expected_row_version: version" in packaged_staff_js
             and "window.crypto.randomUUID()" in packaged_staff_js
             and "window.crypto.getRandomValues(bytes)" in packaged_staff_js,
-            "packaged staff decisions use a fresh secure correlation UUID and row version",
+            "packaged staff writes use a fresh secure correlation UUID and row version",
         )
         require(
             "innerHTML" not in packaged_staff_js
             and "Authorization" not in packaged_staff_js
-            and "portal_service_account_ids" not in packaged_staff_ui,
-            "packaged staff UI contains no unsafe HTML, authorization header, or portal allowlist",
+            and "portal_service_account_ids" not in packaged_staff_ui
+            and "grantAccess" not in packaged_staff_js
+            and "activateReader" not in packaged_staff_js,
+            "packaged staff UI contains no unsafe HTML, authorization header, portal allowlist, or reader access",
         )
-        for control in ("Create", "Delete", "Return", "Renew", "Revoke", "Edit", "Issue"):
+        for control in ("Create", "Delete", "Return", "Renew", "Revoke", "Edit"):
             require(
                 re.search(rf">\s*{control}(?: Request)?\s*<", tool) is None
                 and re.search(
@@ -744,6 +1066,12 @@ def check_archive(path: pathlib.Path) -> None:
                 is None,
                 f"packaged staff tool has no {control} write control",
             )
+        require(
+            f"{BUNDLE_MANIFEST}/Service/StaffLoanIssuanceApplication.pm" in names
+            and f"{BUNDLE_MANIFEST}/Service/ConfiguredLoanPeriodPolicy.pm" in names
+            and f"{BUNDLE_MANIFEST}/Service/LoanIssuanceService.pm" in names,
+            "packaged archive includes Phase 2C issuance runtime modules",
+        )
         configure = archive.read(f"{BUNDLE_MANIFEST}/configure.tt").decode("utf-8")
         require('name="csrf_token"' in configure, "packaged configuration includes CSRF token field")
         require(

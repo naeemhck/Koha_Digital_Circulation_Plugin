@@ -26,6 +26,7 @@
 
     var API_BASE = '/api/v1/contrib/jzl-digital-circulation';
     var DECISION_PATH = '/requests/';
+    var ISSUE_PATH = '/requests/';
     var MAX_REASON_LENGTH = 4096;
     var PUBLIC_DECISION_FIELDS = [
         'request_id',
@@ -40,6 +41,13 @@
         'rejected_by',
         'rejection_reason',
         'row_version'
+    ];
+    var PUBLIC_LOAN_SUMMARY_FIELDS = [
+        'loan_id',
+        'loan_status',
+        'loan_started_at',
+        'loan_due_at',
+        'loan_row_version'
     ];
     var SAFE_COLUMNS = {
         loans: [
@@ -79,6 +87,29 @@
             'Digital Circulation is temporarily unavailable. No decision was recorded.',
         INTERNAL_ERROR:
             'The decision could not be completed. No result should be assumed.'
+    };
+    var ISSUE_ERROR_MESSAGES = {
+        INVALID_INPUT:
+            'The issuance request was invalid. Refresh the page and try again.',
+        AUTHENTICATION_REQUIRED:
+            'Your Koha session has expired. Sign in again before continuing.',
+        STAFF_NOT_AUTHORIZED:
+            'You are not authorized to issue digital loans.',
+        REQUEST_NOT_FOUND: 'This digital request no longer exists.',
+        REQUEST_NOT_APPROVED:
+            'Only an approved digital request can be issued.',
+        LOAN_ALREADY_EXISTS:
+            'A digital loan already exists for this request.',
+        INVALID_MAPPING:
+            'The protected-content mapping is no longer valid.',
+        PROTECTED_CONTENT_UNAVAILABLE:
+            'Protected digital content is temporarily unavailable.',
+        INVALID_LOAN_PERIOD:
+            'Digital loan duration is not configured correctly. Contact a system administrator.',
+        DIGITAL_CIRCULATION_UNAVAILABLE:
+            'Digital circulation is temporarily unavailable.',
+        INTERNAL_ERROR:
+            'The digital loan could not be issued because of an internal error.'
     };
 
     var tabs = document.querySelectorAll('.jzl-tab');
@@ -194,17 +225,15 @@
         errorRegion.textContent = '';
     }
 
-    function safeErrorCode(response, body) {
+    function safeErrorCode(response, body, messages) {
+        var table = messages || ERROR_MESSAGES;
         if (
             body &&
             typeof body === 'object' &&
             body.error &&
             typeof body.error === 'object' &&
             typeof body.error.code === 'string' &&
-            Object.prototype.hasOwnProperty.call(
-                ERROR_MESSAGES,
-                body.error.code
-            )
+            Object.prototype.hasOwnProperty.call(table, body.error.code)
         ) {
             return body.error.code;
         }
@@ -224,6 +253,49 @@
             return 'DIGITAL_CIRCULATION_UNAVAILABLE';
         }
         return 'INTERNAL_ERROR';
+    }
+
+    function loanPresence(request) {
+        var hasId = positiveInteger(request.loan_id);
+        var status = request.loan_status;
+        var hasStatus =
+            typeof status === 'string' && status.length > 0 && !/^\s+$/.test(status);
+        var blankSummary =
+            !hasId &&
+            (status === null || status === undefined || status === '') &&
+            (request.loan_started_at === null ||
+                request.loan_started_at === undefined ||
+                request.loan_started_at === '') &&
+            (request.loan_due_at === null ||
+                request.loan_due_at === undefined ||
+                request.loan_due_at === '') &&
+            (request.loan_row_version === null ||
+                request.loan_row_version === undefined ||
+                request.loan_row_version === '');
+        if (blankSummary) {
+            return 'absent';
+        }
+        if (
+            hasId &&
+            hasStatus &&
+            positiveInteger(request.loan_row_version) &&
+            typeof request.loan_started_at === 'string' &&
+            request.loan_started_at.length > 0 &&
+            typeof request.loan_due_at === 'string' &&
+            request.loan_due_at.length > 0
+        ) {
+            return 'present';
+        }
+        return 'ambiguous';
+    }
+
+    function canIssueRequest(request) {
+        return (
+            request &&
+            request.status === 'APPROVED' &&
+            requestId(request) !== null &&
+            loanPresence(request) === 'absent'
+        );
     }
 
     function parseJsonResponse(response) {
@@ -247,6 +319,11 @@
             merged[key] = original[key];
         });
         PUBLIC_DECISION_FIELDS.forEach(function (key) {
+            if (Object.prototype.hasOwnProperty.call(authoritative, key)) {
+                merged[key] = authoritative[key];
+            }
+        });
+        PUBLIC_LOAN_SUMMARY_FIELDS.forEach(function (key) {
             if (Object.prototype.hasOwnProperty.call(authoritative, key)) {
                 merged[key] = authoritative[key];
             }
@@ -321,6 +398,15 @@
         );
     }
 
+    function issueEndpoint(id) {
+        return (
+            API_BASE +
+            ISSUE_PATH +
+            encodeURIComponent(String(id)) +
+            '/issue'
+        );
+    }
+
     function refreshForCode(code) {
         return (
             code === 'VERSION_CONFLICT' ||
@@ -329,6 +415,19 @@
             code === 'REQUEST_NOT_FOUND' ||
             code === 'DIGITAL_CIRCULATION_UNAVAILABLE' ||
             code === 'INTERNAL_ERROR'
+        );
+    }
+
+    function refreshForIssueCode(code) {
+        return (
+            code === 'LOAN_ALREADY_EXISTS' ||
+            code === 'REQUEST_NOT_APPROVED' ||
+            code === 'REQUEST_NOT_FOUND' ||
+            code === 'INVALID_MAPPING' ||
+            code === 'DIGITAL_CIRCULATION_UNAVAILABLE' ||
+            code === 'INTERNAL_ERROR' ||
+            code === 'INVALID_LOAN_PERIOD' ||
+            code === 'PROTECTED_CONTENT_UNAVAILABLE'
         );
     }
 
@@ -342,6 +441,151 @@
         }
         renderCurrent();
         return Promise.resolve();
+    }
+
+    function finishIssuanceFailure(row, response, body) {
+        var id = requestId(row);
+        var code = safeErrorCode(response, body, ISSUE_ERROR_MESSAGES);
+        notify(ISSUE_ERROR_MESSAGES[code], 'danger');
+        delete inFlight[id];
+        if (refreshForIssueCode(code)) {
+            return load();
+        }
+        renderCurrent();
+        return Promise.resolve();
+    }
+
+    function validTimestamp(value) {
+        return (
+            typeof value === 'string' &&
+            /^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/.test(
+                value
+            )
+        );
+    }
+
+    function validIssuanceSuccess(body, row) {
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            return false;
+        }
+        var keys = Object.keys(body).sort();
+        var expected = [
+            'biblio_id',
+            'due_at',
+            'loan_id',
+            'patron_id',
+            'request_id',
+            'row_version',
+            'started_at',
+            'status'
+        ];
+        if (keys.length !== expected.length) {
+            return false;
+        }
+        for (var i = 0; i < expected.length; i += 1) {
+            if (keys[i] !== expected[i]) {
+                return false;
+            }
+        }
+        return (
+            positiveInteger(body.loan_id) &&
+            requestId(body) === requestId(row) &&
+            positiveInteger(body.patron_id) &&
+            positiveInteger(body.biblio_id) &&
+            body.status === 'ACTIVE' &&
+            validTimestamp(body.started_at) &&
+            validTimestamp(body.due_at) &&
+            body.due_at > body.started_at &&
+            positiveInteger(body.row_version)
+        );
+    }
+
+    function applyIssuanceLoanSummary(original, body) {
+        var merged = {};
+        Object.keys(original).forEach(function (key) {
+            merged[key] = original[key];
+        });
+        merged.loan_id = body.loan_id;
+        merged.loan_status = body.status;
+        merged.loan_started_at = body.started_at;
+        merged.loan_due_at = body.due_at;
+        merged.loan_row_version = body.row_version;
+        return merged;
+    }
+
+    function confirmIssuance(row, trigger) {
+        var confirmed = window.confirm(
+            'Issue an ACTIVE digital loan for this approved request?\n\n' +
+            'This creates an ACTIVE plugin-owned digital loan. ' +
+            'The due date is calculated from configured policy. ' +
+            'Approval alone did not create the loan. ' +
+            'This action still does not grant protected-PDF reader access. ' +
+            'A second loan cannot be created for the same request.'
+        );
+        if (!confirmed) {
+            trigger.focus();
+            return;
+        }
+        submitIssuance(row);
+    }
+
+    function submitIssuance(row) {
+        var id = requestId(row);
+        if (!canIssueRequest(row) || inFlight[id]) {
+            notify(ISSUE_ERROR_MESSAGES.INVALID_INPUT, 'danger');
+            return Promise.resolve();
+        }
+
+        var correlationId;
+        try {
+            correlationId = uuid();
+        } catch (error) {
+            notify(
+                'A secure correlation identifier could not be generated. No loan was issued.',
+                'danger'
+            );
+            return Promise.resolve();
+        }
+
+        inFlight[id] = true;
+        hideNotification();
+        renderCurrent();
+
+        return fetch(issueEndpoint(id), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                Accept: 'application/json',
+                'X-Correlation-ID': correlationId
+            }
+        })
+            .then(parseJsonResponse)
+            .then(function (result) {
+                if (result.response.status !== 201) {
+                    return finishIssuanceFailure(
+                        row,
+                        result.response,
+                        result.body
+                    );
+                }
+                if (!validIssuanceSuccess(result.body, row)) {
+                    throw new Error('MALFORMED_RESPONSE');
+                }
+                delete inFlight[id];
+                rows = rows.map(function (currentRow) {
+                    return requestId(currentRow) === id
+                        ? applyIssuanceLoanSummary(currentRow, result.body)
+                        : currentRow;
+                });
+                renderCurrent();
+                notify('Digital loan issued successfully.', 'success');
+                return backgroundRefreshRequest(id);
+            })
+            .catch(function () {
+                delete inFlight[id];
+                notify(ISSUE_ERROR_MESSAGES.INTERNAL_ERROR, 'danger');
+                return load();
+            });
     }
 
     function submitDecision(row, decision, reason) {
@@ -530,14 +774,47 @@
         rejectReason.focus();
     }
 
+    function appendLoanSummaryCell(tableRow, request) {
+        var cell = document.createElement('td');
+        var presence = loanPresence(request);
+        if (presence === 'present') {
+            var summary = document.createElement('div');
+            summary.className = 'jzl-loan-summary';
+            var titleNode = document.createElement('span');
+            titleNode.className = 'jzl-loan-summary-title';
+            titleNode.textContent = 'Active digital loan';
+            summary.appendChild(titleNode);
+            summary.appendChild(document.createElement('br'));
+            var statusNode = document.createElement('span');
+            statusNode.appendChild(statusBadge(request.loan_status));
+            summary.appendChild(statusNode);
+            summary.appendChild(document.createElement('br'));
+            var started = document.createElement('span');
+            started.textContent = 'Started ' + text(request.loan_started_at);
+            summary.appendChild(started);
+            summary.appendChild(document.createElement('br'));
+            var due = document.createElement('span');
+            due.textContent = 'Due ' + text(request.loan_due_at);
+            summary.appendChild(due);
+            cell.appendChild(summary);
+        } else if (presence === 'ambiguous') {
+            cell.textContent = 'Loan state unavailable';
+        } else {
+            cell.textContent = 'No digital loan';
+        }
+        tableRow.appendChild(cell);
+    }
+
     function appendRequestActions(tableRow, request) {
         var cell = document.createElement('td');
-        var actions = document.createElement('div');
-        actions.className = 'jzl-decision-actions';
-        cell.appendChild(actions);
-
         var id = requestId(request);
+        var busy = id !== null && Boolean(inFlight[id]);
+
         if (request.status === 'PENDING' && id !== null) {
+            var decisionActions = document.createElement('div');
+            decisionActions.className = 'jzl-decision-actions';
+            cell.appendChild(decisionActions);
+
             var approve = document.createElement('button');
             approve.type = 'button';
             approve.className = 'btn btn-primary btn-sm';
@@ -556,7 +833,6 @@
                 'Reject digital request ' + text(id)
             );
 
-            var busy = Boolean(inFlight[id]);
             approve.disabled = busy;
             reject.disabled = busy;
             approve.addEventListener('click', function () {
@@ -565,18 +841,48 @@
             reject.addEventListener('click', function () {
                 openRejectDialog(request, reject);
             });
-            actions.appendChild(approve);
-            actions.appendChild(reject);
+            decisionActions.appendChild(approve);
+            decisionActions.appendChild(reject);
 
             if (busy) {
-                var progress = document.createElement('span');
-                progress.className = 'jzl-decision-progress';
-                progress.setAttribute('role', 'status');
-                progress.textContent = 'Decision in progress…';
-                actions.appendChild(progress);
+                var decisionProgress = document.createElement('span');
+                decisionProgress.className = 'jzl-decision-progress';
+                decisionProgress.setAttribute('role', 'status');
+                decisionProgress.textContent = 'Decision in progress…';
+                decisionActions.appendChild(decisionProgress);
             }
+        } else if (canIssueRequest(request)) {
+            var issueActions = document.createElement('div');
+            issueActions.className = 'jzl-issue-actions';
+            cell.appendChild(issueActions);
+
+            var issue = document.createElement('button');
+            issue.type = 'button';
+            issue.className = 'btn btn-success btn-sm';
+            issue.textContent = 'Issue Loan';
+            issue.setAttribute(
+                'aria-label',
+                'Issue digital loan for approved request ' + text(id)
+            );
+            issue.disabled = busy;
+            issue.addEventListener('click', function () {
+                confirmIssuance(request, issue);
+            });
+            issueActions.appendChild(issue);
+
+            if (busy) {
+                var issueProgress = document.createElement('span');
+                issueProgress.className = 'jzl-issue-progress';
+                issueProgress.setAttribute('role', 'status');
+                issueProgress.textContent = 'Issuance in progress…';
+                issueActions.appendChild(issueProgress);
+            }
+        } else if (request.status === 'APPROVED' && loanPresence(request) === 'present') {
+            cell.textContent = 'No issuance actions';
+        } else if (request.status === 'APPROVED' && loanPresence(request) === 'ambiguous') {
+            cell.textContent = 'Issuance unavailable';
         } else {
-            actions.textContent = 'No decision actions';
+            cell.textContent = 'No decision actions';
         }
 
         tableRow.appendChild(cell);
@@ -592,6 +898,7 @@
             'Row version',
             'Decision',
             'Rejection reason',
+            'Digital loan',
             'Actions'
         ];
         var headerRow = document.createElement('tr');
@@ -618,6 +925,7 @@
                     : '',
                 'jzl-rejection-reason'
             );
+            appendLoanSummaryCell(row, request);
             appendRequestActions(row, request);
             table.tBodies[0].appendChild(row);
         });

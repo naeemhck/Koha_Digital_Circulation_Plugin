@@ -5,7 +5,7 @@
 <main id="main-content" class="container-fluid"><h1>Junaid Zaidi Library Digital eBook Requests</h1>
 [% IF !authorized %]<div class="alert alert-danger" role="alert"><h2>Permission denied</h2><p>The circulation permission is required.</p></div>
 [% ELSE %]
-<div class="alert alert-info" role="status"><strong>Phase 2B — request decisions.</strong> Authorized librarians may approve or reject pending requests. Approval records the librarian decision only; it does not create a loan or grant digital access.</div>
+<div class="alert alert-info" role="status"><strong>Phase 2C — request decisions and loan issuance.</strong> Authorized librarians may approve or reject pending requests and may issue an ACTIVE plugin-owned digital loan from an approved request. Approval alone does not create a loan. Issuance still does not grant protected-PDF reader access or create a native Koha checkout.</div>
 <div class="alert alert-warning" id="compatibility-warning" hidden role="alert">Compatibility warning: this plugin was tested with Koha [% tested_koha | html %].</div>
 <form id="jzl-filters" class="form-inline" aria-label="Digital circulation filters"><label for="jzl-search">Search ID or reference</label> <input id="jzl-search" type="search" class="form-control"> <button type="submit" class="btn btn-default">Filter current view</button></form>
 <ul class="nav nav-tabs" id="jzl-tabs" role="tablist">

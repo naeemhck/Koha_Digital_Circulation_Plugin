@@ -5,6 +5,7 @@ Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Controller/Base.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Controller/Events.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Controller/Health.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Controller/Loans.pm
+Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Controller/Patrons.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Controller/Renewals.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Controller/Requests.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Repository/Base.pm
@@ -14,14 +15,17 @@ Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Repository/RenewalReposito
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Repository/RequestRepository.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/LoanService.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/LoanIssuanceService.pm
+Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/ConfiguredLoanPeriodPolicy.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/EbookContentAdapter.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/EbookContentEligibility.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/PortalServiceAuthorization.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/PortalRequestApplication.pm
+Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/PortalLoanReadApplication.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/RequestDecisionService.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/RequestService.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/StaffDecisionAuthorization.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/StaffRequestDecisionApplication.pm
+Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/StaffLoanIssuanceApplication.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/StateMachine.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/Validation.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/static/css/jzl-digital-circulation.css

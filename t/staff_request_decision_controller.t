@@ -444,7 +444,7 @@ is(
     ( run_case(
         result => { ok => 0, code => 'STAFF_NOT_AUTHORIZED' }
     ) )[0]{json}{error}{message},
-    'The authenticated staff user is not authorized to decide digital requests.',
+    'The authenticated staff user is not authorized for this digital circulation action.',
     'staff denial has exact safe message'
 );
 

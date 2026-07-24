@@ -32,8 +32,10 @@ unlike $tool, qr{(?i)\b(?:https?://|\\\\|[A-Za-z]:\\|/var/|/home/)},
 
 like $js, qr/request\.status === 'PENDING'/,
     'pending requests receive active decision controls';
-like $js, qr/actions\.textContent = 'No decision actions'/,
-    'nonpending and unknown states receive no active controls';
+like $js, qr/No decision actions/,
+    'nonpending and unknown states receive no active decision controls';
+like $js, qr/canIssueRequest\(request\)/,
+    'approved requests without a loan may receive Issue Loan';
 for my $status (qw(APPROVED REJECTED CANCELLED)) {
     like $js, qr/\Q$status\E/,
         "$status is represented without an editable status control";

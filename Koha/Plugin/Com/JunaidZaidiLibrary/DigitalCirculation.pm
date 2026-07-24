@@ -9,6 +9,8 @@ use Koha;
 use Koha::Token;
 use Mojo::JSON qw(decode_json);
 
+use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::ConfiguredLoanPeriodPolicy;
+use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LoanIssuanceService;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalServiceAuthorization;
 
 our $VERSION             = '0.2.0';
@@ -341,6 +343,7 @@ sub configure {
     my ($self) = @_;
     my $cgi = $self->{cgi};
     my $authorization = $self->_configuration_authorization;
+    my $loan_period_policy = $self->_configuration_loan_period_policy;
     my $tokenizer = $self->_configuration_tokenizer;
     my $session_id = eval { $cgi->cookie('CGISESSID') } // '';
     my ( $message, $error );
@@ -359,28 +362,61 @@ sub configure {
         if ( !$csrf_valid ) {
             $error = 'The form expired or failed CSRF validation.';
         }
-        elsif ( ( scalar $cgi->param('op') // '' )
-            ne 'cud-save-portal-service-accounts' )
+        elsif ( ( scalar $cgi->param('op') // '' ) ne 'cud-save-configuration' )
         {
             $error = 'The requested configuration action is invalid.';
         }
         else {
-            my $result = $authorization->store_config(
+            my $portal_result = $authorization->store_config(
                 scalar( $cgi->param('portal_service_account_ids') // '' )
             );
-            if ( $result->{stored} ) {
-                $message = $result->{disabled}
+            my $duration_result = $loan_period_policy->store_config(
+                scalar( $cgi->param('default_loan_duration_days') // '' )
+            );
+
+            my @errors;
+            my @messages;
+            if ( $portal_result->{stored} ) {
+                push @messages,
+                    (
+                    $portal_result->{disabled}
                     ? 'Portal service-account access has been disabled.'
-                    : 'Portal service-account configuration saved.';
+                    : 'Portal service-account configuration saved.'
+                    );
             }
-            elsif ( ( $result->{code} // '' )
+            elsif ( ( $portal_result->{code} // '' )
                 eq 'INVALID_SERVICE_ACCOUNT_ALLOWLIST' )
             {
-                $error =
+                push @errors,
                     'Enter only positive Koha borrowernumbers separated by commas.';
             }
             else {
-                $error = 'The configuration could not be saved safely.';
+                push @errors, 'The configuration could not be saved safely.';
+            }
+
+            if ( $duration_result->{stored} ) {
+                push @messages,
+                    (
+                    $duration_result->{disabled}
+                    ? 'Default digital loan duration has been cleared.'
+                    : 'Default digital loan duration saved.'
+                    );
+            }
+            elsif ( ( $duration_result->{code} // '' )
+                eq 'INVALID_LOAN_DURATION' )
+            {
+                push @errors,
+                    'Enter a whole number of days from 1 to 365, or leave blank.';
+            }
+            else {
+                push @errors, 'The configuration could not be saved safely.';
+            }
+
+            if (@errors) {
+                $error = join ' ', @errors;
+            }
+            elsif (@messages) {
+                $message = join ' ', @messages;
             }
         }
     }
@@ -389,6 +425,16 @@ sub configure {
     my $allowlist_value = '';
     if ( $current->{loaded} ) {
         $allowlist_value = $current->{value};
+    }
+    else {
+        $message = undef;
+        $error ||= 'The current configuration could not be loaded safely.';
+    }
+
+    my $duration_current = $loan_period_policy->load_config;
+    my $duration_value   = '';
+    if ( $duration_current->{loaded} ) {
+        $duration_value = $duration_current->{value};
     }
     else {
         $message = undef;
@@ -406,17 +452,42 @@ sub configure {
 
     my $template = $self->get_template( { file => 'configure.tt' } );
     $template->param(
-        csrf_token                  => $csrf_token,
-        message                     => $message,
-        error                       => $error,
+        csrf_token                 => $csrf_token,
+        message                    => $message,
+        error                      => $error,
         portal_service_account_ids => $allowlist_value,
+        default_loan_duration_days => $duration_value,
     );
     return $self->output_html( $template->output );
+}
+
+sub _build_loan_issuance_service {
+    my ( $self, %args ) = @_;
+    return Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LoanIssuanceService->new(
+        table_resolver => sub {
+            my ($name) = @_;
+            return $self->table($name);
+        },
+        due_date_policy =>
+            Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::ConfiguredLoanPeriodPolicy->new(
+                plugin     => $self,
+                diagnostic => $args{diagnostic},
+            ),
+        diagnostic => $args{diagnostic},
+        %args,
+    );
 }
 
 sub _configuration_authorization {
     my ($self) = @_;
     return Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalServiceAuthorization->new(
+        plugin => $self
+    );
+}
+
+sub _configuration_loan_period_policy {
+    my ($self) = @_;
+    return Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::ConfiguredLoanPeriodPolicy->new(
         plugin => $self
     );
 }

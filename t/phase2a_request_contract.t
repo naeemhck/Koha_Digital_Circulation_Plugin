@@ -210,8 +210,9 @@ is_deeply(
     [
         'post /requests',
         'post /requests/{request_id}/decision',
+        'post /requests/{request_id}/issue',
     ],
-    'production preserves request creation and adds only the staff decision write route'
+    'production preserves request creation plus staff decision and staff issuance write routes'
 );
 
 my $post = $api->{'/requests'}{post};

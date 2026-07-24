@@ -8,7 +8,8 @@ Verified Phase 2B contract remains:
 
 This unit adds an internal transactional service that can create one
 authoritative digital loan from an already-approved request. It is not wired
-into the approval endpoint, staff UI, or OpenAPI routes.
+into the approval endpoint or staff UI. Staff REST exposure is documented
+separately in `docs/PHASE2C_STAFF_LOAN_ISSUANCE_HTTP_API.md`.
 
 ## Authoritative request identity
 
@@ -55,17 +56,20 @@ Later units may transition to `RENEWAL_PENDING`, `RETURNED`, `EXPIRED`, or
 
 ## Loan-period policy boundary
 
-No production loan duration is defined in plugin configuration.
-
 Issuance requires an injected `due_date_policy` that returns either:
 
 - `{ ok => 1, due_at => 'YYYY-MM-DD HH:MM:SS' }`; or
 - `{ ok => 1, duration_seconds => N }` with `N >= 1`
 
 Invalid, missing, equal, or earlier due times fail closed as
-`INVALID_LOAN_PERIOD`. The default policy fails closed and does not invent a
-duration. Production orchestration must supply the policy. Due dates are not
-accepted from HTTP callers in this unit.
+`INVALID_LOAN_PERIOD`. The no-policy default still fails closed.
+
+Production construction now supplies
+`ConfiguredLoanPeriodPolicy`, which reads
+`default_loan_duration_days` from plugin configuration. Blank or invalid
+configuration continues to fail closed as `INVALID_LOAN_PERIOD`. Due dates are
+not accepted from HTTP callers. See
+`docs/PHASE2C_PRODUCTION_LOAN_PERIOD_POLICY.md`.
 
 ## Protected-content revalidation
 
