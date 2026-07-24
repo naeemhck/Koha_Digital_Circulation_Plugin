@@ -1,0 +1,125 @@
+{
+  "route": "/api/v1/contrib/jzl-digital-circulation/requests",
+  "openapi_path": "/requests",
+  "method": "POST",
+  "authentication": {
+    "actor": "authenticated_koha_oauth_service_actor",
+    "authorization": "exact_plugin_configured_service_account_allowlist",
+    "browser_direct_allowed": false,
+    "unauthenticated_status": 401,
+    "unauthorized_service_status": 403,
+    "subject_patron_distinct_from_actor": true
+  },
+  "required_headers": {
+    "Authorization": "Bearer <service-token>",
+    "Content-Type": "application/json",
+    "Idempotency-Key": "<UUID>",
+    "X-Correlation-ID": "<UUID>"
+  },
+  "request": {
+    "exact_body_fields": ["portal_request_id", "patron_id", "biblio_id"],
+    "example": {
+      "portal_request_id": "3c90bf2e-d3d8-4db2-9f5d-d36f792340cd",
+      "patron_id": 123,
+      "biblio_id": 456
+    },
+    "controller_forced_fields": {"source": "PORTAL"},
+    "untrusted_body_fields": ["source", "actor_id", "actor_patron_id", "service_account_id"]
+  },
+  "creation": {
+    "status": 201,
+    "request_status": "PENDING",
+    "idempotent_replay": false,
+    "duplicate_pending": false,
+    "stable_correlation_id": true,
+    "response_fields": ["request", "idempotent_replay", "duplicate_pending", "correlation_id"],
+    "request_fields": [
+      "request_id", "portal_request_id", "patron_id", "biblio_id",
+      "status", "requested_at", "row_version"
+    ]
+  },
+  "repeat_behavior": {
+    "exact_replay": {
+      "status": 200,
+      "same_authoritative_request": true,
+      "idempotent_replay": true,
+      "duplicate_pending": false,
+      "stored_request_count": 1,
+      "request_created_event_count": 1
+    },
+    "existing_pending": {
+      "status": 200,
+      "same_authoritative_request": true,
+      "idempotent_replay": false,
+      "duplicate_pending": true,
+      "stored_request_count": 1,
+      "request_created_event_count": 1
+    },
+    "idempotency_conflict": {
+      "status": 409,
+      "error_code": "IDEMPOTENCY_CONFLICT",
+      "conflicting_fields": ["patron_id", "biblio_id", "portal_request_id"]
+    }
+  },
+  "errors": {
+    "INVALID_INPUT": 400,
+    "INVALID_IDEMPOTENCY_KEY": 400,
+    "AUTHENTICATION_REQUIRED": 401,
+    "SERVICE_ACCOUNT_NOT_AUTHORIZED": 403,
+    "PATRON_NOT_FOUND": 404,
+    "BIBLIO_NOT_FOUND": 404,
+    "CONTENT_NOT_ELIGIBLE": 409,
+    "IDEMPOTENCY_CONFLICT": 409,
+    "DIGITAL_CIRCULATION_UNAVAILABLE": 503,
+    "INTERNAL_ERROR": 500
+  },
+  "error_envelope": {
+    "top_level_fields": ["error"],
+    "error_fields": ["code", "message"],
+    "message_must_be_safe": true,
+    "forbidden_leakage": [
+      "SQL", "DBI stack trace", "filesystem path", "password",
+      "OAuth secret", "bearer token", "database DSN"
+    ]
+  },
+  "transaction": {
+    "ordered_steps": [
+      "validate_idempotency_key",
+      "validate_service_actor",
+      "validate_subject_patron",
+      "validate_koha_biblio",
+      "validate_eligible_protected_ebookcontent",
+      "check_existing_idempotency_record",
+      "check_existing_pending_patron_biblio_request",
+      "insert_pending_request",
+      "insert_request_created_audit_event",
+      "commit_request_and_event"
+    ],
+    "request_and_event_atomic": true,
+    "audit_insert_failure_rolls_back_request": true,
+    "request_created_event_type": "REQUEST_CREATED"
+  },
+  "concurrency": {
+    "uses_existing_database_uniqueness_constraints": true,
+    "stored_pending_request_count": 1,
+    "both_callers_receive_same_authoritative_request": true,
+    "creation_response_count": 1,
+    "other_response": ["duplicate_pending", "idempotent_replay"],
+    "raw_duplicate_key_exposed": false,
+    "request_created_event_count": 1,
+    "live_mariadb_verified_on_windows": false,
+    "verification": "deterministic_contract_only"
+  },
+  "phase1_protections": {
+    "existing_get_routes_remain": true,
+    "existing_get_authorization_unchanged": true,
+    "staff_ui_read_only": true,
+    "allowed_write_routes": ["POST /requests"],
+    "forbidden_staff_controls": [
+      "Approve", "Reject", "Return", "Revoke", "Renew", "Edit", "Delete", "Create"
+    ],
+    "forbidden_write_domains": ["loans", "renewals", "access_entitlements", "librarian_decisions"],
+    "forbidden_native_koha_tables": ["issues", "old_issues", "reserves", "items"],
+    "uninstall_data_preserving": true
+  }
+}

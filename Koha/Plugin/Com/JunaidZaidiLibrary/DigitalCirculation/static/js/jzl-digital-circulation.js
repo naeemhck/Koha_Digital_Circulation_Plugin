@@ -1,4 +1,838 @@
-(function(){'use strict';var s=document.currentScript,u=s&&s.dataset.jzlUrl;if(u){var menu=document.querySelector('#circ-menu ul,nav[aria-label="Circulation"] ul');if(menu&&!menu.querySelector('.jzl-digital-link')){var li=document.createElement('li'),a=document.createElement('a');a.className='jzl-digital-link';a.href=u;a.textContent='Digital eBook Requests';li.appendChild(a);menu.appendChild(li)}return}var tabs=document.querySelectorAll('.jzl-tab'),table=document.getElementById('jzl-table');if(!table)return;var current='requests-PENDING',page=1;
-function esc(v){return String(v==null?'':v)}function load(){var parts=current.split('-'),resource=parts[0],status=parts.slice(1).join('-'),url='/api/v1/contrib/jzl-digital-circulation/'+resource+'?page='+page+'&per_page=25'+(status?'&status='+encodeURIComponent(status):'');var region=table.closest('section'),loading=document.getElementById('jzl-loading'),err=document.getElementById('jzl-error');region.setAttribute('aria-busy','true');loading.hidden=false;err.hidden=true;fetch(url,{credentials:'same-origin',headers:{Accept:'application/json'}}).then(function(r){if(r.status===401||r.status===403)throw new Error('Permission denied.');if(!r.ok)throw new Error('The records could not be loaded.');return r.json()}).then(function(body){render(body.data||[],body.pagination||{})}).catch(function(e){err.textContent=e.message;err.hidden=false;render([],{})}).finally(function(){loading.hidden=true;region.setAttribute('aria-busy','false')})}
-function render(rows,p){var keys=rows.length?Object.keys(rows[0]).filter(function(k){return k!=='payload_json'&&k!=='pending_guard'}):[];table.tHead.innerHTML='<tr>'+keys.map(function(k){return'<th scope="col">'+esc(k.replace(/_/g,' '))+'</th>'}).join('')+'</tr>';table.tBodies[0].innerHTML=rows.map(function(r){return'<tr>'+keys.map(function(k){return'<td>'+esc(r[k])+'</td>'}).join('')+'</tr>'}).join('');document.getElementById('jzl-empty').hidden=rows.length!==0;document.getElementById('jzl-pagination').textContent=p.total!=null?('Page '+p.page+' of '+p.total_pages+' — '+p.total+' records'):''}
-tabs.forEach(function(t){t.addEventListener('click',function(){current=t.dataset.view;page=1;tabs.forEach(function(x){x.setAttribute('aria-selected',x===t?'true':'false')});document.getElementById('jzl-view-heading').textContent=t.textContent;load()})});if(tabs[0]){tabs[0].setAttribute('aria-selected','true');load()}})();
+(function () {
+    'use strict';
+
+    var script = document.currentScript;
+    var toolUrl = script && script.dataset.jzlUrl;
+    if (toolUrl) {
+        var menu = document.querySelector(
+            '#circ-menu ul,nav[aria-label="Circulation"] ul'
+        );
+        if (menu && !menu.querySelector('.jzl-digital-link')) {
+            var item = document.createElement('li');
+            var link = document.createElement('a');
+            link.className = 'jzl-digital-link';
+            link.href = toolUrl;
+            link.textContent = 'Digital eBook Requests';
+            item.appendChild(link);
+            menu.appendChild(item);
+        }
+        return;
+    }
+
+    var table = document.getElementById('jzl-table');
+    if (!table) {
+        return;
+    }
+
+    var API_BASE = '/api/v1/contrib/jzl-digital-circulation';
+    var DECISION_PATH = '/requests/';
+    var MAX_REASON_LENGTH = 4096;
+    var PUBLIC_DECISION_FIELDS = [
+        'request_id',
+        'portal_request_id',
+        'patron_id',
+        'biblio_id',
+        'status',
+        'requested_at',
+        'approved_at',
+        'approved_by',
+        'rejected_at',
+        'rejected_by',
+        'rejection_reason',
+        'row_version'
+    ];
+    var SAFE_COLUMNS = {
+        loans: [
+            'loan_id', 'request_id', 'patron_name', 'patron_id', 'title',
+            'biblio_id', 'status', 'started_at', 'due_at', 'returned_at',
+            'revoked_at', 'expired_at', 'approved_by'
+        ],
+        renewals: [
+            'renewal_id', 'loan_id', 'patron_name', 'patron_id', 'title',
+            'biblio_id', 'status', 'requested_at', 'previous_due_at',
+            'proposed_due_at', 'decided_at', 'decided_by'
+        ],
+        events: [
+            'event_id', 'event_type', 'aggregate_type', 'aggregate_id',
+            'request_id', 'loan_id', 'renewal_id', 'patron_id', 'biblio_id',
+            'actor_patron_id', 'source', 'occurred_at', 'delivery_status',
+            'delivery_attempts', 'next_delivery_at', 'delivered_at',
+            'last_error_code'
+        ]
+    };
+    var ERROR_MESSAGES = {
+        INVALID_INPUT: 'The submitted request was invalid.',
+        INVALID_DECISION: 'The selected decision was invalid.',
+        INVALID_REASON: 'Enter a valid rejection reason.',
+        AUTHENTICATION_REQUIRED:
+            'Your Koha session has expired. Sign in again before continuing.',
+        STAFF_NOT_AUTHORIZED:
+            'You are not authorized to decide digital requests.',
+        REQUEST_NOT_FOUND: 'The request no longer exists.',
+        VERSION_CONFLICT:
+            'This request changed after the page was loaded. Refreshing the current request state.',
+        REQUEST_ALREADY_DECIDED:
+            'This request has already been decided. The current status will be refreshed.',
+        INVALID_STATE:
+            'This request cannot be decided in its current state. The current status will be refreshed.',
+        DIGITAL_CIRCULATION_UNAVAILABLE:
+            'Digital Circulation is temporarily unavailable. No decision was recorded.',
+        INTERNAL_ERROR:
+            'The decision could not be completed. No result should be assumed.'
+    };
+
+    var tabs = document.querySelectorAll('.jzl-tab');
+    var filterForm = document.getElementById('jzl-filters');
+    var searchInput = document.getElementById('jzl-search');
+    var statusRegion = document.getElementById('jzl-status');
+    var errorRegion = document.getElementById('jzl-error');
+    var loading = document.getElementById('jzl-loading');
+    var empty = document.getElementById('jzl-empty');
+    var pagination = document.getElementById('jzl-pagination');
+    var region = table.closest('section');
+    var rejectDialog = document.getElementById('jzl-reject-dialog');
+    var rejectForm = document.getElementById('jzl-reject-form');
+    var rejectLabel = document.getElementById('jzl-reject-request-label');
+    var rejectReason = document.getElementById('jzl-reject-reason');
+    var rejectError = document.getElementById('jzl-reject-error');
+    var rejectCancel = document.getElementById('jzl-reject-cancel');
+    var rejectSubmit = document.getElementById('jzl-reject-submit');
+
+    var current = 'requests-PENDING';
+    var page = 1;
+    var rows = [];
+    var pageInfo = {};
+    var inFlight = Object.create(null);
+    var loadSequence = 0;
+    var rejectContext = null;
+    var rejectSubmitting = false;
+
+    function clear(node) {
+        while (node.firstChild) {
+            node.removeChild(node.firstChild);
+        }
+    }
+
+    function text(value) {
+        return value === null || value === undefined ? '' : String(value);
+    }
+
+    function title(value) {
+        return text(value).replace(/_/g, ' ');
+    }
+
+    function positiveInteger(value) {
+        return (
+            (typeof value === 'number' && Number.isInteger(value) && value > 0) ||
+            (typeof value === 'string' && /^[1-9][0-9]*$/.test(value))
+        );
+    }
+
+    function requestId(row) {
+        return positiveInteger(row.request_id) ? Number(row.request_id) : null;
+    }
+
+    function requestVersion(row) {
+        return positiveInteger(row.row_version) ? Number(row.row_version) : null;
+    }
+
+    function uuid() {
+        if (
+            window.crypto &&
+            typeof window.crypto.randomUUID === 'function'
+        ) {
+            return window.crypto.randomUUID();
+        }
+        if (
+            !window.crypto ||
+            typeof window.crypto.getRandomValues !== 'function'
+        ) {
+            throw new Error('UUID_UNAVAILABLE');
+        }
+        var bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        bytes[6] = (bytes[6] & 15) | 64;
+        bytes[8] = (bytes[8] & 63) | 128;
+        var hex = Array.prototype.map.call(bytes, function (byte) {
+            return byte.toString(16).padStart(2, '0');
+        });
+        return (
+            hex.slice(0, 4).join('') + '-' +
+            hex.slice(4, 6).join('') + '-' +
+            hex.slice(6, 8).join('') + '-' +
+            hex.slice(8, 10).join('') + '-' +
+            hex.slice(10, 16).join('')
+        );
+    }
+
+    function notify(message, type) {
+        statusRegion.textContent = message;
+        statusRegion.className = 'alert alert-' + type;
+        statusRegion.setAttribute(
+            'role',
+            type === 'danger' ? 'alert' : 'status'
+        );
+        statusRegion.setAttribute(
+            'aria-live',
+            type === 'danger' ? 'assertive' : 'polite'
+        );
+        statusRegion.hidden = false;
+    }
+
+    function hideNotification() {
+        statusRegion.hidden = true;
+        statusRegion.textContent = '';
+    }
+
+    function showPageError(message) {
+        errorRegion.textContent = message;
+        errorRegion.hidden = false;
+    }
+
+    function hidePageError() {
+        errorRegion.hidden = true;
+        errorRegion.textContent = '';
+    }
+
+    function safeErrorCode(response, body) {
+        if (
+            body &&
+            typeof body === 'object' &&
+            body.error &&
+            typeof body.error === 'object' &&
+            typeof body.error.code === 'string' &&
+            Object.prototype.hasOwnProperty.call(
+                ERROR_MESSAGES,
+                body.error.code
+            )
+        ) {
+            return body.error.code;
+        }
+        if (response.status === 401) {
+            return 'AUTHENTICATION_REQUIRED';
+        }
+        if (response.status === 403) {
+            return 'STAFF_NOT_AUTHORIZED';
+        }
+        if (response.status === 404) {
+            return 'REQUEST_NOT_FOUND';
+        }
+        if (response.status === 500) {
+            return 'INTERNAL_ERROR';
+        }
+        if (response.status === 503) {
+            return 'DIGITAL_CIRCULATION_UNAVAILABLE';
+        }
+        return 'INTERNAL_ERROR';
+    }
+
+    function parseJsonResponse(response) {
+        return response.text().then(function (bodyText) {
+            var body;
+            try {
+                body = JSON.parse(bodyText);
+            } catch (error) {
+                throw new Error('MALFORMED_RESPONSE');
+            }
+            if (!body || typeof body !== 'object' || Array.isArray(body)) {
+                throw new Error('MALFORMED_RESPONSE');
+            }
+            return { response: response, body: body };
+        });
+    }
+
+    function copyPublicDecisionRequest(original, authoritative) {
+        var merged = {};
+        Object.keys(original).forEach(function (key) {
+            merged[key] = original[key];
+        });
+        PUBLIC_DECISION_FIELDS.forEach(function (key) {
+            if (Object.prototype.hasOwnProperty.call(authoritative, key)) {
+                merged[key] = authoritative[key];
+            }
+        });
+        return merged;
+    }
+
+    function validDecisionSuccess(body, row, decision) {
+        var expectedStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+        return (
+            body &&
+            body.previous_status === 'PENDING' &&
+            body.new_status === expectedStatus &&
+            positiveInteger(body.previous_row_version) &&
+            Number(body.previous_row_version) === requestVersion(row) &&
+            positiveInteger(body.row_version) &&
+            Number(body.row_version) === requestVersion(row) + 1 &&
+            body.request &&
+            typeof body.request === 'object' &&
+            requestId(body.request) === requestId(row) &&
+            body.request.status === expectedStatus &&
+            requestVersion(body.request) === Number(body.row_version)
+        );
+    }
+
+    function replaceRequest(authoritative, original) {
+        var id = requestId(authoritative);
+        rows = rows.map(function (row) {
+            return requestId(row) === id
+                ? copyPublicDecisionRequest(original || row, authoritative)
+                : row;
+        });
+        renderCurrent();
+    }
+
+    function backgroundRefreshRequest(id) {
+        return fetch(API_BASE + '/requests/' + encodeURIComponent(String(id)), {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+        })
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('REFRESH_FAILED');
+                }
+                return parseJsonResponse(response);
+            })
+            .then(function (result) {
+                var authoritative = result.body;
+                if (
+                    requestId(authoritative) !== id ||
+                    !positiveInteger(authoritative.row_version) ||
+                    typeof authoritative.status !== 'string'
+                ) {
+                    throw new Error('REFRESH_FAILED');
+                }
+                var original = rows.find(function (row) {
+                    return requestId(row) === id;
+                }) || {};
+                replaceRequest(authoritative, original);
+            })
+            .catch(function () {
+                return undefined;
+            });
+    }
+
+    function decisionEndpoint(id) {
+        return (
+            API_BASE +
+            DECISION_PATH +
+            encodeURIComponent(String(id)) +
+            '/decision'
+        );
+    }
+
+    function refreshForCode(code) {
+        return (
+            code === 'VERSION_CONFLICT' ||
+            code === 'REQUEST_ALREADY_DECIDED' ||
+            code === 'INVALID_STATE' ||
+            code === 'REQUEST_NOT_FOUND' ||
+            code === 'DIGITAL_CIRCULATION_UNAVAILABLE' ||
+            code === 'INTERNAL_ERROR'
+        );
+    }
+
+    function finishFailure(row, response, body) {
+        var id = requestId(row);
+        var code = safeErrorCode(response, body);
+        notify(ERROR_MESSAGES[code], 'danger');
+        delete inFlight[id];
+        if (refreshForCode(code)) {
+            return load();
+        }
+        renderCurrent();
+        return Promise.resolve();
+    }
+
+    function submitDecision(row, decision, reason) {
+        var id = requestId(row);
+        var version = requestVersion(row);
+        if (
+            id === null ||
+            version === null ||
+            row.status !== 'PENDING' ||
+            inFlight[id]
+        ) {
+            notify(ERROR_MESSAGES.INVALID_INPUT, 'danger');
+            return Promise.resolve();
+        }
+
+        var correlationId;
+        try {
+            correlationId = uuid();
+        } catch (error) {
+            notify(
+                'A secure correlation identifier could not be generated. No decision was recorded.',
+                'danger'
+            );
+            return Promise.resolve();
+        }
+
+        inFlight[id] = true;
+        hideNotification();
+        renderCurrent();
+
+        var command = {
+            expected_row_version: version,
+            decision: decision,
+            reason: decision === 'APPROVE' ? null : reason
+        };
+
+        return fetch(decisionEndpoint(id), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Correlation-ID': correlationId
+            },
+            body: JSON.stringify(command)
+        })
+            .then(parseJsonResponse)
+            .then(function (result) {
+                if (result.response.status !== 200) {
+                    return finishFailure(row, result.response, result.body);
+                }
+                if (!validDecisionSuccess(result.body, row, decision)) {
+                    throw new Error('MALFORMED_RESPONSE');
+                }
+                delete inFlight[id];
+                replaceRequest(result.body.request, row);
+                notify(
+                    decision === 'APPROVE'
+                        ? 'Request approved successfully.'
+                        : 'Request rejected successfully.',
+                    'success'
+                );
+                return backgroundRefreshRequest(id);
+            })
+            .catch(function () {
+                delete inFlight[id];
+                notify(ERROR_MESSAGES.INTERNAL_ERROR, 'danger');
+                return load();
+            });
+    }
+
+    function appendTextCell(row, value, className) {
+        var cell = document.createElement('td');
+        if (className) {
+            cell.className = className;
+        }
+        cell.textContent = text(value);
+        row.appendChild(cell);
+        return cell;
+    }
+
+    function appendHeader(headerRow, label) {
+        var header = document.createElement('th');
+        header.scope = 'col';
+        header.textContent = label;
+        headerRow.appendChild(header);
+    }
+
+    function statusBadge(value) {
+        var status = text(value);
+        var badge = document.createElement('span');
+        badge.className =
+            'jzl-status-badge jzl-status-' + status.toLowerCase();
+        badge.textContent = status || 'UNKNOWN';
+        return badge;
+    }
+
+    function patronLabel(row) {
+        return row.patron_name
+            ? text(row.patron_name) + ' (' + text(row.patron_id) + ')'
+            : text(row.patron_id);
+    }
+
+    function biblioLabel(row) {
+        return row.title
+            ? text(row.title) + ' (' + text(row.biblio_id) + ')'
+            : text(row.biblio_id);
+    }
+
+    function decisionText(row) {
+        if (row.status === 'APPROVED') {
+            return (
+                'Approved ' +
+                text(row.approved_at) +
+                ' by staff ' +
+                text(row.approved_by)
+            );
+        }
+        if (row.status === 'REJECTED') {
+            return (
+                'Rejected ' +
+                text(row.rejected_at) +
+                ' by staff ' +
+                text(row.rejected_by)
+            );
+        }
+        if (row.status === 'CANCELLED') {
+            return 'Cancelled ' + text(row.cancelled_at);
+        }
+        return '';
+    }
+
+    function confirmApproval(row, trigger) {
+        var approved = window.confirm(
+            'Approve this digital request?\n\n' +
+            'This records the librarian decision only. ' +
+            'It does not create a loan or grant digital access.'
+        );
+        if (!approved) {
+            trigger.focus();
+            return;
+        }
+        submitDecision(row, 'APPROVE', null);
+    }
+
+    function validateReason(reason) {
+        return (
+            typeof reason === 'string' &&
+            reason.trim().length > 0 &&
+            reason.length <= MAX_REASON_LENGTH
+        );
+    }
+
+    function openRejectDialog(row, trigger) {
+        if (
+            !rejectDialog ||
+            typeof rejectDialog.showModal !== 'function'
+        ) {
+            var fallbackReason = window.prompt(
+                'Reject digital request ' + text(row.request_id) +
+                '. Enter a required plain-text reason (maximum 4,096 characters).'
+            );
+            if (fallbackReason === null) {
+                trigger.focus();
+                return;
+            }
+            if (!validateReason(fallbackReason)) {
+                notify(ERROR_MESSAGES.INVALID_REASON, 'danger');
+                trigger.focus();
+                return;
+            }
+            submitDecision(row, 'REJECT', fallbackReason);
+            return;
+        }
+
+        rejectContext = { row: row, trigger: trigger };
+        rejectSubmitting = false;
+        rejectLabel.textContent = '#' + text(row.request_id);
+        rejectReason.value = '';
+        rejectReason.disabled = false;
+        rejectError.textContent = '';
+        rejectError.hidden = true;
+        rejectCancel.disabled = false;
+        rejectSubmit.disabled = false;
+        rejectDialog.hidden = false;
+        rejectDialog.showModal();
+        rejectReason.focus();
+    }
+
+    function appendRequestActions(tableRow, request) {
+        var cell = document.createElement('td');
+        var actions = document.createElement('div');
+        actions.className = 'jzl-decision-actions';
+        cell.appendChild(actions);
+
+        var id = requestId(request);
+        if (request.status === 'PENDING' && id !== null) {
+            var approve = document.createElement('button');
+            approve.type = 'button';
+            approve.className = 'btn btn-primary btn-sm';
+            approve.textContent = 'Approve';
+            approve.setAttribute(
+                'aria-label',
+                'Approve digital request ' + text(id)
+            );
+
+            var reject = document.createElement('button');
+            reject.type = 'button';
+            reject.className = 'btn btn-danger btn-sm';
+            reject.textContent = 'Reject';
+            reject.setAttribute(
+                'aria-label',
+                'Reject digital request ' + text(id)
+            );
+
+            var busy = Boolean(inFlight[id]);
+            approve.disabled = busy;
+            reject.disabled = busy;
+            approve.addEventListener('click', function () {
+                confirmApproval(request, approve);
+            });
+            reject.addEventListener('click', function () {
+                openRejectDialog(request, reject);
+            });
+            actions.appendChild(approve);
+            actions.appendChild(reject);
+
+            if (busy) {
+                var progress = document.createElement('span');
+                progress.className = 'jzl-decision-progress';
+                progress.setAttribute('role', 'status');
+                progress.textContent = 'Decision in progress…';
+                actions.appendChild(progress);
+            }
+        } else {
+            actions.textContent = 'No decision actions';
+        }
+
+        tableRow.appendChild(cell);
+    }
+
+    function renderRequests(displayRows) {
+        var labels = [
+            'Request ID',
+            'Patron',
+            'Bibliographic record',
+            'Status',
+            'Requested',
+            'Row version',
+            'Decision',
+            'Rejection reason',
+            'Actions'
+        ];
+        var headerRow = document.createElement('tr');
+        labels.forEach(function (label) {
+            appendHeader(headerRow, label);
+        });
+        table.tHead.appendChild(headerRow);
+
+        displayRows.forEach(function (request) {
+            var row = document.createElement('tr');
+            appendTextCell(row, request.request_id);
+            appendTextCell(row, patronLabel(request));
+            appendTextCell(row, biblioLabel(request));
+            var statusCell = document.createElement('td');
+            statusCell.appendChild(statusBadge(request.status));
+            row.appendChild(statusCell);
+            appendTextCell(row, request.requested_at);
+            appendTextCell(row, request.row_version);
+            appendTextCell(row, decisionText(request));
+            appendTextCell(
+                row,
+                request.status === 'REJECTED'
+                    ? request.rejection_reason
+                    : '',
+                'jzl-rejection-reason'
+            );
+            appendRequestActions(row, request);
+            table.tBodies[0].appendChild(row);
+        });
+    }
+
+    function renderGeneric(resource, displayRows) {
+        var columns = SAFE_COLUMNS[resource] || [];
+        var headerRow = document.createElement('tr');
+        columns.forEach(function (column) {
+            appendHeader(headerRow, title(column));
+        });
+        table.tHead.appendChild(headerRow);
+        displayRows.forEach(function (record) {
+            var row = document.createElement('tr');
+            columns.forEach(function (column) {
+                appendTextCell(row, record[column]);
+            });
+            table.tBodies[0].appendChild(row);
+        });
+    }
+
+    function filteredRows() {
+        var query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+        if (!query) {
+            return rows.slice();
+        }
+        return rows.filter(function (row) {
+            return [
+                row.request_id,
+                row.portal_request_id,
+                row.patron_id,
+                row.patron_name,
+                row.biblio_id,
+                row.title,
+                row.status
+            ].some(function (value) {
+                return text(value).toLowerCase().indexOf(query) !== -1;
+            });
+        });
+    }
+
+    function renderCurrent() {
+        var resource = current.split('-')[0];
+        var displayRows = filteredRows();
+        clear(table.tHead);
+        clear(table.tBodies[0]);
+        if (resource === 'requests') {
+            renderRequests(displayRows);
+        } else {
+            renderGeneric(resource, displayRows);
+        }
+        empty.hidden = displayRows.length !== 0;
+        pagination.textContent =
+            pageInfo.total !== undefined
+                ? (
+                    'Page ' + text(pageInfo.page) +
+                    ' of ' + text(pageInfo.total_pages) +
+                    ' — ' + text(pageInfo.total) + ' records'
+                )
+                : '';
+    }
+
+    function load() {
+        var parts = current.split('-');
+        var resource = parts[0];
+        var status = parts.slice(1).join('-');
+        var sequence = ++loadSequence;
+        var url =
+            API_BASE + '/' + resource +
+            '?page=' + page +
+            '&per_page=25' +
+            (status ? '&status=' + encodeURIComponent(status) : '');
+
+        region.setAttribute('aria-busy', 'true');
+        loading.hidden = false;
+        hidePageError();
+
+        return fetch(url, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' }
+        })
+            .then(function (response) {
+                if (response.status === 401) {
+                    throw new Error('AUTHENTICATION_REQUIRED');
+                }
+                if (response.status === 403) {
+                    throw new Error('STAFF_NOT_AUTHORIZED');
+                }
+                if (!response.ok) {
+                    throw new Error('LOAD_FAILED');
+                }
+                return parseJsonResponse(response);
+            })
+            .then(function (result) {
+                if (
+                    sequence !== loadSequence ||
+                    !Array.isArray(result.body.data) ||
+                    !result.body.pagination ||
+                    typeof result.body.pagination !== 'object'
+                ) {
+                    if (sequence !== loadSequence) {
+                        return;
+                    }
+                    throw new Error('MALFORMED_RESPONSE');
+                }
+                rows = result.body.data;
+                pageInfo = result.body.pagination;
+                renderCurrent();
+            })
+            .catch(function (error) {
+                if (sequence !== loadSequence) {
+                    return;
+                }
+                rows = [];
+                pageInfo = {};
+                renderCurrent();
+                if (error.message === 'AUTHENTICATION_REQUIRED') {
+                    showPageError(ERROR_MESSAGES.AUTHENTICATION_REQUIRED);
+                } else if (error.message === 'STAFF_NOT_AUTHORIZED') {
+                    showPageError(ERROR_MESSAGES.STAFF_NOT_AUTHORIZED);
+                } else {
+                    showPageError('The records could not be loaded safely.');
+                }
+            })
+            .then(function () {
+                if (sequence === loadSequence) {
+                    loading.hidden = true;
+                    region.setAttribute('aria-busy', 'false');
+                }
+            });
+    }
+
+    if (rejectCancel) {
+        rejectCancel.addEventListener('click', function () {
+            if (!rejectSubmitting) {
+                rejectDialog.close('cancel');
+            }
+        });
+    }
+
+    if (rejectDialog) {
+        rejectDialog.addEventListener('cancel', function (event) {
+            if (rejectSubmitting) {
+                event.preventDefault();
+            }
+        });
+        rejectDialog.addEventListener('close', function () {
+            rejectDialog.hidden = true;
+            if (
+                rejectContext &&
+                rejectContext.trigger &&
+                !rejectSubmitting
+            ) {
+                rejectContext.trigger.focus();
+            }
+            if (!rejectSubmitting) {
+                rejectContext = null;
+            }
+        });
+    }
+
+    if (rejectForm) {
+        rejectForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (rejectSubmitting || !rejectContext) {
+                return;
+            }
+            var reason = rejectReason.value;
+            if (!validateReason(reason)) {
+                rejectError.textContent = ERROR_MESSAGES.INVALID_REASON;
+                rejectError.hidden = false;
+                rejectReason.focus();
+                return;
+            }
+            rejectSubmitting = true;
+            rejectReason.disabled = true;
+            rejectCancel.disabled = true;
+            rejectSubmit.disabled = true;
+            var context = rejectContext;
+            submitDecision(context.row, 'REJECT', reason).then(function () {
+                rejectSubmitting = false;
+                rejectDialog.close('submitted');
+                rejectContext = null;
+            });
+        });
+    }
+
+    if (filterForm) {
+        filterForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            renderCurrent();
+        });
+    }
+
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            current = tab.dataset.view;
+            page = 1;
+            rows = [];
+            pageInfo = {};
+            hideNotification();
+            tabs.forEach(function (candidate) {
+                candidate.setAttribute(
+                    'aria-selected',
+                    candidate === tab ? 'true' : 'false'
+                );
+            });
+            document.getElementById('jzl-view-heading').textContent =
+                tab.textContent;
+            load();
+        });
+    });
+
+    if (tabs[0]) {
+        tabs[0].setAttribute('aria-selected', 'true');
+        load();
+    }
+}());

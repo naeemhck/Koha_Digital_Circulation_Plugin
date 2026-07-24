@@ -1,0 +1,50 @@
+[% USE raw %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Digital Circulation Configuration &rsaquo; Plugins &rsaquo; Koha</title>
+[% INCLUDE 'doc-head-close.inc' %]
+</head>
+<body id="plugins_jzl_digital_circulation_configure" class="plugins">
+[% WRAPPER 'header.inc' %]
+  [% INCLUDE 'prefs-admin-search.inc' %]
+[% END %]
+<div id="main" class="container-fluid">
+  <nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+      <li><a href="/cgi-bin/koha/mainpage.pl">Home</a></li>
+      <li><a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a></li>
+      <li aria-current="page">Digital Circulation configuration</li>
+    </ol>
+  </nav>
+
+  <h1>Digital Circulation configuration</h1>
+  [% IF message %]<div class="alert alert-success" role="status">[% message | html %]</div>[% END %]
+  [% IF error %]<div class="alert alert-danger" role="alert">[% error | html %]</div>[% END %]
+
+  <form method="post">
+    <input type="hidden" name="class" value="[% CLASS | html %]">
+    <input type="hidden" name="method" value="configure">
+    <input type="hidden" name="op" value="cud-save-portal-service-accounts">
+    <input type="hidden" name="csrf_token" value="[% csrf_token | html %]">
+    <fieldset class="rows">
+      <legend>Portal request service account</legend>
+      <ol>
+        <li>
+          <label for="portal_service_account_ids">Portal service-account borrowernumbers</label>
+          <input
+            id="portal_service_account_ids"
+            name="portal_service_account_ids"
+            type="text"
+            maxlength="4096"
+            value="[% portal_service_account_ids | html %]"
+            placeholder="123,456,789"
+          >
+          <span class="hint">
+            Enter exact Koha borrowernumbers separated by commas. These accounts must correspond to the OAuth-authenticated portal service actor. This field does not store OAuth credentials. Leaving it blank disables portal request creation.
+          </span>
+        </li>
+      </ol>
+    </fieldset>
+    <button class="btn btn-primary" type="submit">Save configuration</button>
+  </form>
+</div>
+[% INCLUDE 'intranet-bottom.inc' %]
