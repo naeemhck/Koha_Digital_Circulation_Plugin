@@ -39,7 +39,8 @@ like $js, qr/jzl-digital-circulation-shortcut/,
     'stable shortcut ID is present';
 like $js, qr/getElementById\('jzl-digital-circulation-shortcut'\)/,
     'duplicate-insertion guard checks the stable ID';
-like $js, qr/#circ-menu ul,nav\[aria-label="Circulation"\] ul/,
+like $js,
+    qr/\.circulation-actions ul\.buttons-list,#circ-menu ul,nav\[aria-label="Circulation"\] ul/,
     'shortcut targets the Circulation menu selectors';
 like $js, qr/dataset\.jzlUrl/,
     'shortcut reads the root-relative tool URL from data-jzl-url';

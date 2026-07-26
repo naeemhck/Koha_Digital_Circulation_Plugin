@@ -5,15 +5,17 @@
     var toolUrl = script && script.dataset.jzlUrl;
     if (toolUrl) {
         // Navigation-only Circulation shortcut. Does not call request/loan APIs.
+        // Koha 26.05 circulation-home uses .circulation-actions ul.buttons-list;
+        // keep legacy #circ-menu / aria-label selectors for older templates.
         if (!document.getElementById('jzl-digital-circulation-shortcut')) {
             var menu = document.querySelector(
-                '#circ-menu ul,nav[aria-label="Circulation"] ul'
+                '.circulation-actions ul.buttons-list,#circ-menu ul,nav[aria-label="Circulation"] ul'
             );
             if (menu) {
                 var item = document.createElement('li');
                 var link = document.createElement('a');
                 link.id = 'jzl-digital-circulation-shortcut';
-                link.className = 'jzl-digital-link';
+                link.className = 'circ-button jzl-digital-link';
                 link.href = toolUrl;
                 link.textContent = 'Digital Circulation';
                 item.appendChild(link);

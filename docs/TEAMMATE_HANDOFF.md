@@ -13,7 +13,7 @@ docs remain under `docs/`.
 | Checkpoint base commit | `e19a669` (Phase 2C–3A source) |
 | Plugin Perl package | `Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation` |
 | API namespace | `jzl-digital-circulation` |
-| Plugin version | `0.2.1` |
+| Plugin version | `0.2.2` |
 | Minimum Koha version | `26.05.00.000` |
 | Tested Koha version | `26.05.01.000` |
 | Schema version | `1` |
@@ -85,11 +85,13 @@ auditable.
 ## Staff Circulation shortcut
 
 On Koha Circulation home (`circulation-home.pl`), `intranet_js` injects a
-**Digital Circulation** link (`#jzl-digital-circulation-shortcut`) that opens
-the existing plugin tool via a root-relative `plugins/run.pl?...&method=tool`
-URL. No Koha core template patch. No hard-coded host/port. Digital circulation
-remains separate from native physical issues. Shortcut visibility is **not**
-authorization; the tool enforces circulate permission server-side.
+**Digital Circulation** button (`#jzl-digital-circulation-shortcut`) into
+`.circulation-actions ul.buttons-list` (legacy menu selectors retained) that
+opens the existing plugin tool via a root-relative
+`plugins/run.pl?...&method=tool` URL. No Koha core template patch. No
+hard-coded host/port. Digital circulation remains separate from native
+physical issues. Shortcut visibility is **not** authorization; the tool
+enforces circulate permission server-side.
 
 This shortcut worktree/branch starts from `fde23f1` and does **not** include
 Phase 4B patron-return work. Phase 4B remains in the original working tree on
@@ -155,7 +157,7 @@ or `.\build-kpz.ps1` (Windows packaging helper) when a new candidate is required
 
 Safe identifiers only (no patron names, cards, passwords, or tokens):
 
-- Digital Circulation plugin `0.2.1` enabled; EbookContent `0.1.2` enabled
+- Digital Circulation plugin `0.2.2` enabled; EbookContent `0.1.2` enabled
 - `portal_service_account_ids` includes **53**
 - `default_loan_duration_days` = **14**
 - Request **7**: `APPROVED`

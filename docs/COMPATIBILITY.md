@@ -7,10 +7,11 @@ Installed plugin inspected: `Koha::Plugin::Com::Ecombranding::EbookContent` v0.1
 Minimum intended release is 26.05.00.000. Only 26.05.01.000 is tested. Later 26.05 maintenance releases require regression testing; 26.11+ is unsupported until tested.
 
 Digital Circulation plugin version covered by this compatibility claim is
-**0.2.1** (schema 1), with EbookContent **0.1.2** as the protected-content
+**0.2.2** (schema 1), with EbookContent **0.1.2** as the protected-content
 dependency. See [TEAMMATE_HANDOFF.md](TEAMMATE_HANDOFF.md) for continuation
-guidance. Patch **0.2.1** adds the Circulation staff shortcut only; it does
-not change the schema, REST contracts, or native Koha circulation.
+guidance. Patch **0.2.2** adds the Circulation staff shortcut for the Koha
+26.05 `.circulation-actions` button list; it does not change the schema,
+REST contracts, or native Koha circulation.
 
 ## Circulation staff shortcut
 

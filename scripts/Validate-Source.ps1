@@ -30,7 +30,7 @@ function Read-ArchiveText($Archive, [string]$Name) {
     finally { $reader.Dispose() }
 }
 
-Assert-Contract ($source.Contains("our `$VERSION             = '0.2.1';")) 'plugin version is 0.2.1'
+Assert-Contract ($source.Contains("our `$VERSION             = '0.2.2';")) 'plugin version is 0.2.2'
 Assert-Contract ($source.Contains('our $SCHEMA_VERSION      = 1;')) 'schema version remains 1'
 Assert-Contract ($source.Contains("minimum_version => '26.05.00.000'")) 'minimum Koha version remains 26.05.00.000'
 
@@ -89,7 +89,7 @@ foreach ($control in @('Create','Delete','Return','Renew','Revoke','Edit')) {
 $pluginMain = Read-Utf8TextFile (Join-Path $root "$bundle.pm")
 Assert-Contract ($pluginMain.Contains('sub intranet_js') -and ($pluginMain.Contains('circulation-home.pl') -or $pluginMain.Contains('circulation-home\.pl')) -and $pluginMain.Contains('method=tool') -and $pluginMain.Contains('data-jzl-url')) 'intranet_js emits the Circulation-home plugin-tool shortcut script'
 Assert-Contract ($staffJs.Contains("textContent = 'Digital Circulation'") -and $staffJs.Contains('jzl-digital-circulation-shortcut') -and $staffJs.Contains("getElementById('jzl-digital-circulation-shortcut')")) 'Circulation shortcut uses Digital Circulation label, stable ID, and duplicate guard'
-Assert-Contract ($staffJs.Contains('#circ-menu ul,nav[aria-label="Circulation"] ul') -and $staffJs.Contains('dataset.jzlUrl')) 'Circulation shortcut targets Circulation menu selectors with data-jzl-url'
+Assert-Contract ($staffJs.Contains('.circulation-actions ul.buttons-list,#circ-menu ul,nav[aria-label="Circulation"] ul') -and $staffJs.Contains('dataset.jzlUrl')) 'Circulation shortcut targets Circulation menu selectors with data-jzl-url'
 Assert-Contract (-not ($pluginMain -match 'https?://') -and -not $pluginMain.Contains('192.168.') -and -not ($staffJs -match 'https?://') -and -not $staffJs.Contains('192.168.')) 'Circulation shortcut has no hard-coded host'
 Assert-Contract (-not $staffJs.Contains('/cgi-bin/koha/circ/circulation.pl') -and -not $staffJs.Contains('/cgi-bin/koha/circ/returns.pl') -and -not $pluginMain.Contains('AddIssue') -and -not $pluginMain.Contains('AddReturn')) 'Circulation shortcut does not use native circulation routes'
 $baseRepo = Read-Utf8TextFile (Join-Path $root "$bundle/Repository/Base.pm")
@@ -229,7 +229,7 @@ if ($Kpz) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $resolvedKpz = Resolve-Path $Kpz
     Assert-Contract (
-        (Split-Path -Leaf $resolvedKpz) -match '^JunaidZaidiLibrary-DigitalCirculation-v0\.2\.1(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?\.kpz$'
+        (Split-Path -Leaf $resolvedKpz) -match '^JunaidZaidiLibrary-DigitalCirculation-v0\.2\.2(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?\.kpz$'
     ) 'archive filename matches internal plugin version'
     Assert-Contract ((Get-Item $resolvedKpz).Length -ge 10000) 'archive is not suspiciously small'
     $archive = [IO.Compression.ZipFile]::OpenRead($resolvedKpz)
@@ -256,7 +256,7 @@ if ($Kpz) {
     Assert-Contract ($names -contains "$bundle/tool.tt") 'archive contains tool.tt at bundle root'
     Assert-Contract ($names -contains "$bundle/configure.tt") 'archive contains configure.tt at bundle root'
     Assert-Contract (-not ($names | Where-Object { $_ -like 'Koha_Digital_Circulation_Plugin/*' })) 'archive has no extra repository directory'
-    Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.2.1';")) 'packaged internal plugin version is 0.2.1'
+    Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.2.2';")) 'packaged internal plugin version is 0.2.2'
     Assert-Contract ($packagedMain.Contains("return 'jzl-digital-circulation';")) 'packaged API namespace is unchanged'
     $packagedOpenapi = $packagedOpenapiText | ConvertFrom-Json
     $operationIds = @()
