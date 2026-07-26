@@ -229,7 +229,7 @@ if ($Kpz) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $resolvedKpz = Resolve-Path $Kpz
     Assert-Contract (
-        (Split-Path -Leaf $resolvedKpz) -match '^JunaidZaidiLibrary-DigitalCirculation-v0\.2\.0(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?\.kpz$'
+        (Split-Path -Leaf $resolvedKpz) -match '^JunaidZaidiLibrary-DigitalCirculation-v0\.2\.1(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?\.kpz$'
     ) 'archive filename matches internal plugin version'
     Assert-Contract ((Get-Item $resolvedKpz).Length -ge 10000) 'archive is not suspiciously small'
     $archive = [IO.Compression.ZipFile]::OpenRead($resolvedKpz)
