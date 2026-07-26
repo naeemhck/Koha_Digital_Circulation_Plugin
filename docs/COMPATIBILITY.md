@@ -7,6 +7,19 @@ Installed plugin inspected: `Koha::Plugin::Com::Ecombranding::EbookContent` v0.1
 Minimum intended release is 26.05.00.000. Only 26.05.01.000 is tested. Later 26.05 maintenance releases require regression testing; 26.11+ is unsupported until tested.
 
 Digital Circulation plugin version covered by this compatibility claim is
-**0.2.0** (schema 1), with EbookContent **0.1.2** as the protected-content
+**0.2.2** (schema 1), with EbookContent **0.1.2** as the protected-content
 dependency. See [TEAMMATE_HANDOFF.md](TEAMMATE_HANDOFF.md) for continuation
-guidance.
+guidance. Patch **0.2.2** combines the Circulation staff shortcut for the Koha
+26.05 `.circulation-actions` button list with the Phase 4B authoritative
+patron-return endpoint. It does not change schema version 1 or native Koha
+circulation.
+
+## Circulation staff shortcut
+
+The Circulation home shortcut is injected only through the plugin’s
+`intranet_js` / `intranet_head` hooks. No Koha core template modification is
+required. Existing Koha installations receive the shortcut only after an
+updated plugin KPZ is installed or upgraded. The shortcut opens the plugin
+staff tool; digital circulation remains separate from native physical
+`issues` checkout. Shortcut visibility is not a substitute for server-side
+authorization on the tool.

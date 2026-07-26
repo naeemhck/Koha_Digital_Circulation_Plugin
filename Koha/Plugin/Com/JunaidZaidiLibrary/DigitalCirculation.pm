@@ -13,7 +13,7 @@ use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::Configur
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LoanIssuanceService;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalServiceAuthorization;
 
-our $VERSION             = '0.2.0';
+our $VERSION             = '0.2.2';
 our $SCHEMA_VERSION      = 1;
 our $TESTED_KOHA_VERSION = '26.05.01.000';
 

@@ -13,7 +13,7 @@ docs remain under `docs/`.
 | Checkpoint base commit | `e19a669` (Phase 2C–3A source) |
 | Plugin Perl package | `Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation` |
 | API namespace | `jzl-digital-circulation` |
-| Plugin version | `0.2.0` |
+| Plugin version | `0.2.2` |
 | Minimum Koha version | `26.05.00.000` |
 | Tested Koha version | `26.05.01.000` |
 | Schema version | `1` |
@@ -81,6 +81,21 @@ auditable.
 | Phase 2C loan issuance | Complete (`POST /requests/{id}/issue` + UI + duration policy) |
 | Phase 3A portal patron-loan read | Complete (`GET /patrons/{patron_id}/loans`) |
 | Phase 4B patron return | Implemented (`POST /loans/{loan_id}/return`) — not live-verified; portal flag remains disabled |
+| Circulation staff shortcut | Integrated (navigation only; combined release not deployed) |
+
+## Staff Circulation shortcut
+
+On Koha Circulation home (`circulation-home.pl`), `intranet_js` injects a
+**Digital Circulation** button (`#jzl-digital-circulation-shortcut`) into
+`.circulation-actions ul.buttons-list` (legacy menu selectors retained) that
+opens the existing plugin tool via a root-relative
+`plugins/run.pl?...&method=tool` URL. No Koha core template patch. No
+hard-coded host/port. Digital circulation remains separate from native
+physical issues. Shortcut visibility is **not** authorization; the tool
+enforces circulate permission server-side.
+
+The combined integration branch contains both this navigation-only shortcut
+and the Phase 4B authoritative patron-return runtime.
 
 ## REST routes
 
@@ -144,7 +159,7 @@ or `.\build-kpz.ps1` (Windows packaging helper) when a new candidate is required
 
 Safe identifiers only (no patron names, cards, passwords, or tokens):
 
-- Digital Circulation plugin `0.2.0` enabled; EbookContent `0.1.2` enabled
+- Digital Circulation plugin `0.2.2` enabled; EbookContent `0.1.2` enabled
 - `portal_service_account_ids` includes **53**
 - `default_loan_duration_days` = **14**
 - Request **7**: `APPROVED`
