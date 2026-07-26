@@ -13,7 +13,7 @@ use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::Configur
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LoanIssuanceService;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalServiceAuthorization;
 
-our $VERSION             = '0.2.0';
+our $VERSION             = '0.2.1';
 our $SCHEMA_VERSION      = 1;
 our $TESTED_KOHA_VERSION = '26.05.01.000';
 
@@ -22,7 +22,7 @@ our $metadata = {
     author          => 'Junaid Zaidi Library, COMSATS University Islamabad',
     description     => 'Koha-authoritative request, approval, renewal, return, expiry, revocation, and access-state management for protected institutional eBooks.',
     date_authored   => '2026-07-21',
-    date_updated    => '2026-07-21',
+    date_updated    => '2026-07-26',
     minimum_version => '26.05.00.000',
     version         => $VERSION,
     class           => __PACKAGE__,
@@ -249,6 +249,15 @@ sub _migration_001 {
         $VERSION,
         '001_initial_schema',
         '69bcf09d56f99afe'
+    );
+
+    # Patch upgrades keep schema_version=1; refresh the recorded plugin_version
+    # stamp only so verification matches the installed code version. No DDL.
+    $dbh->do(
+        "UPDATE `$v` SET plugin_version = ? WHERE schema_version = ?",
+        undef,
+        $VERSION,
+        $SCHEMA_VERSION
     );
 
     return 1;
@@ -523,6 +532,8 @@ sub intranet_head {
     return '<link rel="stylesheet" href="/api/v1/contrib/jzl-digital-circulation/assets/jzl-digital-circulation-css">';
 }
 
+# Page-aware Circulation navigation shortcut only. Visibility is not authorization;
+# the plugin tool method continues to enforce circulate_remaining_permissions.
 sub intranet_js {
     my ( $self, $args ) = @_;
     return '' unless ( $args->{page} // '' ) =~ m{circulation-home\.pl\z};

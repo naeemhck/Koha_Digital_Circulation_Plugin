@@ -22,7 +22,7 @@ EXPECTED_TABLES = [
     "events",
     "schema_versions",
 ]
-PLUGIN_VERSION = "0.2.0"
+PLUGIN_VERSION = "0.2.1"
 
 # Detect real Windows absolute paths, UNC shares, Koha instance paths, usable
 # bearer samples, and literal credentials. The drive-letter branch requires a
@@ -115,7 +115,7 @@ def check_source() -> None:
         if line.strip()
     ]
     openapi = json.loads((ROOT / BUNDLE / "openapi.json").read_text(encoding="utf-8"))
-    require(f"our $VERSION             = '{PLUGIN_VERSION}';" in source, "plugin version is 0.2.0")
+    require(f"our $VERSION             = '{PLUGIN_VERSION}';" in source, "plugin version is 0.2.1")
     require("our $SCHEMA_VERSION      = 1;" in source, "schema version remains 1")
     require("minimum_version => '26.05.00.000'" in source, "minimum Koha version remains 26.05.00.000")
 
@@ -222,6 +222,44 @@ def check_source() -> None:
         and "window.crypto.getRandomValues(bytes)" in staff_js
         and "submitIssuance" in staff_js,
         "staff writes use a fresh secure correlation UUID and dedicated issuance submit helper",
+    )
+    plugin_main = (ROOT / f"{BUNDLE_MANIFEST}.pm").read_text(encoding="utf-8")
+    require(
+        "sub intranet_js" in plugin_main
+        and (
+            "circulation-home.pl" in plugin_main
+            or r"circulation-home\.pl" in plugin_main
+        )
+        and "method=tool" in plugin_main
+        and "data-jzl-url" in plugin_main,
+        "intranet_js emits the Circulation-home plugin-tool shortcut script",
+    )
+    require(
+        "textContent = 'Digital Circulation'" in staff_js
+        and "jzl-digital-circulation-shortcut" in staff_js
+        and "getElementById('jzl-digital-circulation-shortcut')" in staff_js,
+        "Circulation shortcut uses Digital Circulation label, stable ID, and duplicate guard",
+    )
+    require(
+        '#circ-menu ul,nav[aria-label="Circulation"] ul' in staff_js
+        and "dataset.jzlUrl" in staff_js,
+        "Circulation shortcut targets Circulation menu selectors with data-jzl-url",
+    )
+    require(
+        "http://" not in plugin_main
+        and "https://" not in plugin_main
+        and "192.168." not in plugin_main
+        and "http://" not in staff_js
+        and "https://" not in staff_js
+        and "192.168." not in staff_js,
+        "Circulation shortcut has no hard-coded host",
+    )
+    require(
+        "/cgi-bin/koha/circ/circulation.pl" not in staff_js
+        and "/cgi-bin/koha/circ/returns.pl" not in staff_js
+        and "AddIssue" not in plugin_main
+        and "AddReturn" not in plugin_main,
+        "Circulation shortcut does not use native circulation routes",
     )
     require(
         "innerHTML" not in staff_js
@@ -940,7 +978,7 @@ def check_archive(path: pathlib.Path) -> None:
         packaged_main = archive.read(f"{BUNDLE_MANIFEST}.pm").decode("utf-8")
         require(
             f"our $VERSION             = '{PLUGIN_VERSION}';" in packaged_main,
-            "packaged internal plugin version is 0.2.0",
+            "packaged internal plugin version is 0.2.1",
         )
         require(
             "return 'jzl-digital-circulation';" in packaged_main,

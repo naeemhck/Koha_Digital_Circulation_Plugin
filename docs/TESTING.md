@@ -4,6 +4,8 @@ On the Koha 26.05.01.000 host run the tests and build inside `koha-shell`, for e
 
 Verify clean/repeated install, migration rows/indexes/checks, partial-failure rerun, preserved uninstall, invalid patron/biblio service validation, uniqueness guards, state transitions, API authentication/permissions/filter/pagination/not-found/safe errors, staff tabs/empty/error/denial/read-only states, navigation, keyboard focus, and absence of write controls. Fixture code refuses to run unless both explicit test guards are present and never runs automatically.
 
+Circulation shortcut contracts are covered by `t/circulation_shortcut.t` and both source validators: label `Digital Circulation`, stable id `jzl-digital-circulation-shortcut`, duplicate guard, `circulation-home.pl` page gate, root-relative plugin tool URL, no hard-coded host, no native circulation routes, and no business writes in the navigation branch.
+
 On Windows, run `powershell -ExecutionPolicy Bypass -File .\scripts\Validate-Source.ps1`, `prove -I. -v t` when a compatible Perl/Koha library environment is available, and `powershell -ExecutionPolicy Bypass -File .\build-kpz.ps1`. The PowerShell validator checks SQL balance, the deployed events-table regression, pending-only uniqueness, migration verification, runtime paths, archive membership, and forbidden content. MariaDB execution, Koha template resolution, route loading, and staff-session authorization still require the controlled Debian test deployment; Windows static/package checks do not establish live installation success.
 
 ## Validation matrix

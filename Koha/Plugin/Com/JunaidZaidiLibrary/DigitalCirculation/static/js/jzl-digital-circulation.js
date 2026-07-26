@@ -4,17 +4,21 @@
     var script = document.currentScript;
     var toolUrl = script && script.dataset.jzlUrl;
     if (toolUrl) {
-        var menu = document.querySelector(
-            '#circ-menu ul,nav[aria-label="Circulation"] ul'
-        );
-        if (menu && !menu.querySelector('.jzl-digital-link')) {
-            var item = document.createElement('li');
-            var link = document.createElement('a');
-            link.className = 'jzl-digital-link';
-            link.href = toolUrl;
-            link.textContent = 'Digital eBook Requests';
-            item.appendChild(link);
-            menu.appendChild(item);
+        // Navigation-only Circulation shortcut. Does not call request/loan APIs.
+        if (!document.getElementById('jzl-digital-circulation-shortcut')) {
+            var menu = document.querySelector(
+                '#circ-menu ul,nav[aria-label="Circulation"] ul'
+            );
+            if (menu) {
+                var item = document.createElement('li');
+                var link = document.createElement('a');
+                link.id = 'jzl-digital-circulation-shortcut';
+                link.className = 'jzl-digital-link';
+                link.href = toolUrl;
+                link.textContent = 'Digital Circulation';
+                item.appendChild(link);
+                menu.appendChild(item);
+            }
         }
         return;
     }
