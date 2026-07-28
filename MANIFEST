@@ -44,5 +44,3 @@ Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/static/css/jzl-digital-cir
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/static/js/jzl-digital-circulation.js
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/configure.tt
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/tool.tt
-docs/REPORTING.md
-docs/PHASE6_RELEASE_0.4.0.md
