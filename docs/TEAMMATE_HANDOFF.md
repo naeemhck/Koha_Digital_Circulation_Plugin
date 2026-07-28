@@ -13,7 +13,7 @@ docs remain under `docs/`.
 | Checkpoint base commit | `e19a669` (Phase 2C–3A source) |
 | Plugin Perl package | `Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation` |
 | API namespace | `jzl-digital-circulation` |
-| Plugin version | `0.2.3` |
+| Plugin version | `0.3.0` |
 | Minimum Koha version | `26.05.00.000` |
 | Tested Koha version | `26.05.01.000` |
 | Schema version | `1` |
@@ -83,9 +83,9 @@ auditable.
 | Phase 4B patron return | Implemented (`POST /loans/{loan_id}/return`) — not live-verified; portal flag remains disabled |
 | Circulation staff shortcut | Integrated (navigation only; combined release not deployed) |
 
-The 0.2.3 upgrade retains schema version 1. A dedicated post-migration,
+The 0.3.0 upgrade retains schema version 1. A dedicated post-migration,
 transactional upsert updates the one canonical schema-state row's
-`plugin_version` from 0.2.2 to 0.2.3 before strict verification and commit.
+`plugin_version` from 0.2.3 to 0.3.0 before strict verification and commit.
 This is release-metadata maintenance, not schema migration 2, and does not
 modify requests, loans, renewals, events, lifecycle values, or native Koha
 circulation. The earlier undeployed KPZ with SHA-256
@@ -311,3 +311,12 @@ https://github.com/naeemhck/Ebook_issuing/pull/1
 Related local checkpoint:
 
 `docs/PROJECT_CHECKPOINT_PHASE3A.md`
+
+## Phase 5 isolated implementation
+
+The uncommitted `feature/phase5-authoritative-loan-lifecycle` worktree adds
+disabled-by-default renewal, staff revocation, and automatic expiry while
+retaining version 0.3.0/schema 1. Start with
+`PHASE5_AUTHORITATIVE_LOAN_LIFECYCLE.md`. Do not enable, package, install,
+commit, or merge it without a separately authorized checkpoint and the full
+Koha-host Perl gate.

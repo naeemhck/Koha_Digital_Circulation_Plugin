@@ -50,3 +50,10 @@ Release packaging requires both gates. Helpers under `t/lib` are test-only,
 are not listed in `MANIFEST`, and must not be included in a KPZ. The controlled
 Koha-host gate uses the real Koha modules and remains authoritative for runtime
 integration.
+
+For Phase 5 also run `scripts/simulate_phase5_lifecycle.py`. It covers renewal
+replay/version contention, every terminal race pairing, past-due behavior,
+bounded repeated expiry, named/row-lock source contracts, event rollback,
+progress preservation, route/event inventory, database UTC, and native
+circulation isolation. `t/lifecycle_contract.t` is part of the complete Perl
+gate; a simulation pass is not a claim that Perl tests passed.

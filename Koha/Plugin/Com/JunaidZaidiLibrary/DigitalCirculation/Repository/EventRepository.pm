@@ -43,6 +43,44 @@ sub insert_loan_returned_event {
     return $self->_insert_request_event( $dbh, %args );
 }
 
+sub insert_loan_renewed_event {
+    my ( $self, $dbh, %args ) = @_;
+    $args{event_type} = 'LOAN_RENEWED';
+    return $self->_insert_request_event( $dbh, %args );
+}
+
+sub insert_loan_revoked_event {
+    my ( $self, $dbh, %args ) = @_;
+    $args{event_type} = 'LOAN_REVOKED';
+    return $self->_insert_request_event( $dbh, %args );
+}
+
+sub insert_loan_expired_event {
+    my ( $self, $dbh, %args ) = @_;
+    $args{event_type} = 'LOAN_EXPIRED';
+    return $self->_insert_request_event( $dbh, %args );
+}
+
+sub find_loan_event_by_correlation {
+    my ( $self, $dbh, %args ) = @_;
+    my $table = $self->{table_name};
+    return $dbh->selectrow_hashref(
+        qq{
+            SELECT event_id, event_type, loan_id, request_id, correlation_id,
+                   actor_patron_id, occurred_at, payload_json
+              FROM `$table`
+             WHERE event_type = ?
+               AND correlation_id = ?
+               AND loan_id = ?
+             LIMIT 1
+        },
+        undef,
+        $args{event_type},
+        $args{correlation_id},
+        $args{loan_id}
+    );
+}
+
 sub _insert_request_event {
     my ( $self, $dbh, %args ) = @_;
     my $table = $self->{table_name};

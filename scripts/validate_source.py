@@ -22,7 +22,7 @@ EXPECTED_TABLES = [
     "events",
     "schema_versions",
 ]
-PLUGIN_VERSION = "0.2.3"
+PLUGIN_VERSION = "0.3.0"
 
 # Detect real Windows absolute paths, UNC shares, Koha instance paths, usable
 # bearer samples, and literal credentials. The drive-letter branch requires a
@@ -115,7 +115,7 @@ def check_source() -> None:
         if line.strip()
     ]
     openapi = json.loads((ROOT / BUNDLE / "openapi.json").read_text(encoding="utf-8"))
-    require(f"our $VERSION             = '{PLUGIN_VERSION}';" in source, "plugin version is 0.2.3")
+    require(f"our $VERSION             = '{PLUGIN_VERSION}';" in source, "plugin version is 0.3.0")
     require("our $SCHEMA_VERSION      = 1;" in source, "schema version remains 1")
     require("minimum_version => '26.05.00.000'" in source, "minimum Koha version remains 26.05.00.000")
 
@@ -198,8 +198,14 @@ def check_source() -> None:
         f"{BUNDLE_MANIFEST}/Service/PortalRequestApplication.pm",
         f"{BUNDLE_MANIFEST}/Service/PortalLoanReadApplication.pm",
         f"{BUNDLE_MANIFEST}/Service/PortalLoanReturnApplication.pm",
+        f"{BUNDLE_MANIFEST}/Service/PortalLoanRenewalApplication.pm",
+        f"{BUNDLE_MANIFEST}/Service/PortalLoanExpiryApplication.pm",
+        f"{BUNDLE_MANIFEST}/Service/StaffLoanRevocationApplication.pm",
+        f"{BUNDLE_MANIFEST}/Service/LoanLifecycleService.pm",
+        f"{BUNDLE_MANIFEST}/Service/LifecyclePolicy.pm",
         f"{BUNDLE_MANIFEST}/Controller/Patrons.pm",
         f"{BUNDLE_MANIFEST}/Controller/Loans.pm",
+        f"{BUNDLE_MANIFEST}/Controller/Maintenance.pm",
         f"{BUNDLE_MANIFEST}/Repository/RequestRepository.pm",
         f"{BUNDLE_MANIFEST}/Repository/EventRepository.pm",
         f"{BUNDLE_MANIFEST}/Service/RequestDecisionService.pm",
@@ -222,10 +228,9 @@ def check_source() -> None:
     ).read_text(encoding="utf-8")
     staff_ui = tool + "\n" + staff_js
     require(
-        "Phase 2C — request decisions and loan issuance" in tool
-        and "Approval alone does not create a loan" in tool
-        and "does not grant protected-PDF reader access" in tool,
-        "staff tool states the Phase 2C decision and issuance boundary",
+        "Authoritative digital circulation" in tool
+        and "never create, renew, or return a native Koha checkout" in tool,
+        "staff tool states the authoritative/native circulation boundary",
     )
     require(
         "approve.textContent = 'Approve'" in staff_js
@@ -304,7 +309,7 @@ def check_source() -> None:
         and "activateReader" not in staff_js,
         "staff UI contains no unsafe HTML, authorization header, portal allowlist, or reader access",
     )
-    for control in ("Create", "Delete", "Return", "Renew", "Revoke", "Edit"):
+    for control in ("Create", "Delete", "Return", "Renew", "Edit"):
         require(
             re.search(rf">\s*{control}(?: Request)?\s*<", tool) is None
             and re.search(rf"\.textContent\s*=\s*['\"]{control}(?: Request)?['\"]", staff_js)
@@ -701,12 +706,15 @@ def check_source() -> None:
     require(
         write_routes
         == [
+            "post /loans/{loan_id}/renew",
             "post /loans/{loan_id}/return",
+            "post /loans/{loan_id}/revoke",
+            "post /maintenance/expire-loans",
             "post /requests",
             "post /requests/{request_id}/decision",
             "post /requests/{request_id}/issue",
         ],
-        "source OpenAPI has exactly four POST routes including patron return",
+        "source OpenAPI has exactly seven required POST routes",
     )
     return_post = openapi.get("/loans/{loan_id}/return", {}).get("post")
     require(
@@ -1023,7 +1031,7 @@ def check_archive(path: pathlib.Path) -> None:
         packaged_main = archive.read(f"{BUNDLE_MANIFEST}.pm").decode("utf-8")
         require(
             f"our $VERSION             = '{PLUGIN_VERSION}';" in packaged_main,
-            "packaged internal plugin version is 0.2.3",
+            "packaged internal plugin version is 0.3.0",
         )
         require(
             "sub _stamp_schema_state" in packaged_main
@@ -1060,12 +1068,15 @@ def check_archive(path: pathlib.Path) -> None:
         require(
             post_routes
             == [
+                "/loans/{loan_id}/renew",
                 "/loans/{loan_id}/return",
+                "/loans/{loan_id}/revoke",
+                "/maintenance/expire-loans",
                 "/requests",
                 "/requests/{request_id}/decision",
                 "/requests/{request_id}/issue",
             ],
-            "packaged OpenAPI has exactly four POST routes including patron return",
+            "packaged OpenAPI has exactly seven required POST routes",
         )
         require(
             packaged_openapi["/loans/{loan_id}/return"]["post"].get("operationId")
@@ -1116,10 +1127,9 @@ def check_archive(path: pathlib.Path) -> None:
         ).decode("utf-8")
         packaged_staff_ui = tool + "\n" + packaged_staff_js
         require(
-            "Phase 2C — request decisions and loan issuance" in tool
-            and "Approval alone does not create a loan" in tool
-            and "does not grant protected-PDF reader access" in tool,
-            "packaged staff tool states the Phase 2C decision and issuance boundary",
+            "Authoritative digital circulation" in tool
+            and "never create, renew, or return a native Koha checkout" in tool,
+            "packaged staff tool states the authoritative/native circulation boundary",
         )
         require(
             "approve.textContent = 'Approve'" in packaged_staff_js
@@ -1157,7 +1167,7 @@ def check_archive(path: pathlib.Path) -> None:
             and "activateReader" not in packaged_staff_js,
             "packaged staff UI contains no unsafe HTML, authorization header, portal allowlist, or reader access",
         )
-        for control in ("Create", "Delete", "Return", "Renew", "Revoke", "Edit"):
+        for control in ("Create", "Delete", "Return", "Renew", "Edit"):
             require(
                 re.search(rf">\s*{control}(?: Request)?\s*<", tool) is None
                 and re.search(

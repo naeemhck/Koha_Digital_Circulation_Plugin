@@ -321,7 +321,7 @@ open my $openapi_fh, '<',
     or die $!;
 my $openapi = do { local $/; <$openapi_fh> };
 my @posts = $openapi =~ /"post"\s*:/ig;
-is scalar @posts, 3, 'OpenAPI POST count is exactly three after staff issuance exposure';
+is scalar @posts, 7, 'OpenAPI POST count is exactly seven after lifecycle exposure';
 
 open my $tool_fh, '<',
     'Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/tool.tt'
@@ -331,8 +331,8 @@ open my $staff_js_fh, '<',
     'Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/static/js/jzl-digital-circulation.js'
     or die $!;
 my $staff_js = do { local $/; <$staff_js_fh> };
-like $tool, qr/Phase 2C .* request decisions and loan issuance/,
-    'staff tool identifies the Phase 2C decision and issuance scope';
+like $tool, qr/Authoritative digital circulation/,
+    'staff tool identifies the authoritative digital-circulation scope';
 like $staff_js, qr/request\.status === 'PENDING'/,
     'staff decision controls are pending-only';
 like $staff_js, qr/issue\.textContent = 'Issue Loan'/,

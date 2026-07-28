@@ -69,7 +69,7 @@ my $retry_dbh = Local::MigrationDBH->new;
 ok $retry_dbh->{tables}{plugin_jzl_ebook_events}, 'retry creates events table';
 ok $retry_dbh->{tables}{plugin_jzl_ebook_schema_versions}, 'retry creates schema-version table';
 is_deeply $retry_dbh->{schema_rows},
-    [ { schema_version => 1, plugin_version => '0.2.3' } ],
+    [ { schema_version => 1, plugin_version => '0.3.0' } ],
     'retry records canonical schema 1 and current plugin version';
 ok $retry_dbh->{released}, 'retry releases migration lock';
 ok !grep( /DROP TABLE/i, @{ $retry_dbh->{calls} } ), 'retry is non-destructive';

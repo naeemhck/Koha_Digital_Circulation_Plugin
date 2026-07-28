@@ -1,12 +1,12 @@
 # Junaid Zaidi Library Digital eBook Circulation
 
-Version **0.2.3**, schema **1**, tested against Koha **26.05.01.000**
+Version **0.3.0**, schema **1**, tested against Koha **26.05.01.000**
 (`koha-common` 26.05.01-1, MariaDB 10.11.18).
 
 Koha-authoritative plugin for protected institutional eBook requests, staff
 approval/rejection, digital-loan issuance, and portal-service loan reads.
 Native Koha physical issues remain untouched. Protected PDF bytes remain in
-EbookContent **0.1.2**. Version **0.2.3** combines the Circulation-home
+EbookContent **0.1.2**. Version **0.3.0** combines the Circulation-home
 **Digital Circulation** staff shortcut for the Koha 26.05 button layout and
 includes the Phase 4B authoritative patron-return endpoint. It is safe to
 upgrade over **0.2.0** / **0.2.1** without changing schema version 1.
@@ -35,7 +35,7 @@ Also see:
 ## Build and install
 
 Build on Debian inside the instance environment with `./build-kpz.sh`, inspect
-with `unzip -l dist/JunaidZaidiLibrary-DigitalCirculation-v0.2.3.kpz`, then
+with `unzip -l dist/JunaidZaidiLibrary-DigitalCirculation-v0.3.0.kpz`, then
 follow `docs/INSTALLATION.md`. On Windows, packaging validation uses
 `.\build-kpz.ps1` and `.\scripts\Validate-Source.ps1`.
 

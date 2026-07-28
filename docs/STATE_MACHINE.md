@@ -1,3 +1,9 @@
 # State machine
 
-Requests: `PENDING -> APPROVED|REJECTED|CANCELLED`. Renewals: the same. Loans: `ACTIVE -> RENEWAL_PENDING|RETURNED|EXPIRED|REVOKED`, and `RENEWAL_PENDING -> ACTIVE` after either renewal decision. All other transitions, duplicate decisions, terminal reactivation, loans without an approved portal request, more than one loan per request, and multiple pending renewals are forbidden. Phase 1 encodes and tests rules but exposes no mutation route.
+Requests: `PENDING -> APPROVED|REJECTED|CANCELLED`. Authoritative loans:
+`ACTIVE -> RETURNED|REVOKED|EXPIRED`, or `ACTIVE -> ACTIVE` through renewal.
+Renewal extends the existing due date and increments the renewal counter and
+row version. `RETURNED`, `REVOKED`, and `EXPIRED` are terminal; no reactivation
+or cross-terminal transition exists. All lifecycle writes lock the same loan
+and use the current row version. See
+[PHASE5_AUTHORITATIVE_LOAN_LIFECYCLE.md](PHASE5_AUTHORITATIVE_LOAN_LIFECYCLE.md).

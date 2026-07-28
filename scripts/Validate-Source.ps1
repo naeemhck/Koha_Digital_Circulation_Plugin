@@ -4,7 +4,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $bundle = 'Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation'
 $main = Join-Path $root 'Koha\Plugin\Com\JunaidZaidiLibrary\DigitalCirculation.pm'
 $utf8Strict = [Text.UTF8Encoding]::new($false, $true)
-$phase2Boundary = 'Phase 2C ' + [char]0x2014 + ' request decisions and loan issuance'
+$phase2Boundary = 'Authoritative digital circulation'
 $phase2PackedBoundary = 'Phase 2B ' + [char]0x2014 + ' request decisions'
 
 function Read-Utf8TextFile([string]$Path) {
@@ -30,7 +30,7 @@ function Read-ArchiveText($Archive, [string]$Name) {
     finally { $reader.Dispose() }
 }
 
-Assert-Contract ($source.Contains("our `$VERSION             = '0.2.3';")) 'plugin version is 0.2.3'
+Assert-Contract ($source.Contains("our `$VERSION             = '0.3.0';")) 'plugin version is 0.3.0'
 Assert-Contract ($source.Contains('our $SCHEMA_VERSION      = 1;')) 'schema version remains 1'
 Assert-Contract ($source.Contains("minimum_version => '26.05.00.000'")) 'minimum Koha version remains 26.05.00.000'
 
@@ -84,13 +84,13 @@ foreach ($runtime in @("$bundle.pm", "$bundle/openapi.json", "$bundle/Controller
 $tool = Read-Utf8TextFile (Join-Path $root $toolPath)
 $staffJs = Read-Utf8TextFile (Join-Path $root "$bundle/static/js/jzl-digital-circulation.js")
 $staffUi = $tool + "`n" + $staffJs
-Assert-Contract ($tool.Contains($phase2Boundary) -and $tool.Contains('Approval alone does not create a loan') -and $tool.Contains('does not grant protected-PDF reader access')) 'staff tool states the Phase 2C decision and issuance boundary'
+Assert-Contract ($tool.Contains($phase2Boundary) -and $tool.Contains('never create, renew, or return a native Koha checkout')) 'staff tool states the authoritative/native circulation boundary'
 Assert-Contract ($staffJs.Contains("approve.textContent = 'Approve'") -and $staffJs.Contains("reject.textContent = 'Reject'") -and $staffJs.Contains("request.status === 'PENDING'")) 'staff tool exposes Approve and Reject only for pending requests'
 Assert-Contract ($staffJs.Contains("issue.textContent = 'Issue Loan'") -and $staffJs.Contains('canIssueRequest(request)') -and $staffJs.Contains("loanPresence(request) === 'absent'") -and $staffJs.Contains("request.status === 'APPROVED'")) 'Issue Loan appears only for APPROVED requests without a loan'
 Assert-Contract ($staffJs.Contains("DECISION_PATH = '/requests/'") -and $staffJs.Contains("'/decision'") -and $staffJs.Contains("ISSUE_PATH = '/requests/'") -and $staffJs.Contains("'/issue'") -and $staffJs.Contains("method: 'POST'") -and $staffJs.Contains("credentials: 'same-origin'")) 'staff decisions and issuance use only the same-origin verified REST endpoints'
 Assert-Contract ($staffJs.Contains("'X-Correlation-ID': correlationId") -and $staffJs.Contains('expected_row_version: version') -and $staffJs.Contains('window.crypto.randomUUID()') -and $staffJs.Contains('window.crypto.getRandomValues(bytes)') -and $staffJs.Contains('submitIssuance')) 'staff writes use a fresh secure correlation UUID and dedicated issuance submit helper'
 Assert-Contract (-not $staffJs.Contains('innerHTML') -and -not $staffJs.Contains('Authorization') -and -not $staffUi.Contains('portal_service_account_ids') -and -not $staffJs.Contains('grantAccess') -and -not $staffJs.Contains('activateReader')) 'staff UI contains no unsafe HTML, authorization header, portal allowlist, or reader access'
-foreach ($control in @('Create','Delete','Return','Renew','Revoke','Edit')) {
+foreach ($control in @('Create','Delete','Return','Renew','Edit')) {
     Assert-Contract (-not ($tool -match ">\s*$control(?: Request)?\s*<") -and -not ($staffJs -match "\.textContent\s*=\s*['""]$control(?: Request)?['""]")) "staff tool has no $control write control"
 }
 $pluginMain = Read-Utf8TextFile (Join-Path $root "$bundle.pm")
@@ -184,7 +184,7 @@ foreach ($pathProperty in $openapi.PSObject.Properties) {
         }
     }
 }
-Assert-Contract ($writeRoutes.Count -eq 4 -and $writeRoutes -contains 'post /requests' -and $writeRoutes -contains 'post /requests/{request_id}/decision' -and $writeRoutes -contains 'post /requests/{request_id}/issue' -and $writeRoutes -contains 'post /loans/{loan_id}/return') 'source OpenAPI has exactly four POST routes including patron return'
+Assert-Contract ($writeRoutes.Count -eq 7 -and $writeRoutes -contains 'post /requests' -and $writeRoutes -contains 'post /requests/{request_id}/decision' -and $writeRoutes -contains 'post /requests/{request_id}/issue' -and $writeRoutes -contains 'post /loans/{loan_id}/return' -and $writeRoutes -contains 'post /loans/{loan_id}/renew' -and $writeRoutes -contains 'post /loans/{loan_id}/revoke' -and $writeRoutes -contains 'post /maintenance/expire-loans') 'source OpenAPI has exactly seven required POST routes'
 $portalLoanGet = $openapi.'/patrons/{patron_id}/loans'.get
 Assert-Contract ($portalLoanGet.operationId -eq 'jzlListPatronDigitalLoans' -and $portalLoanGet.'x-mojo-to' -eq 'Com::JunaidZaidiLibrary::DigitalCirculation::Controller::Patrons#list_loans') 'portal loan-read OpenAPI route and controller operation agree'
 $portalLoanPatron = $portalLoanGet.parameters | Where-Object { $_.in -eq 'path' -and $_.name -eq 'patron_id' }
@@ -209,6 +209,8 @@ Assert-Contract ($returnPath.required -and $returnCorrelation.required -and $ret
 Assert-Contract ($returnBody.schema.additionalProperties -eq $false -and $returnBody.schema.required.Count -eq 3 -and $returnBody.schema.properties.patron_id -and $returnBody.schema.properties.portal_request_id -and $returnBody.schema.properties.expected_row_version) 'patron return body is closed and carries correlation fields'
 Assert-Contract ($returnPost.responses.'200' -and $returnPost.responses.'400' -and $returnPost.responses.'401' -and $returnPost.responses.'403' -and $returnPost.responses.'404' -and $returnPost.responses.'409' -and $returnPost.responses.'500' -and $returnPost.responses.'503') 'patron return response statuses are complete'
 $loanReturnService = Read-Utf8TextFile (Join-Path $root "$bundle/Service/LoanReturnService.pm")
+$loanLifecycleService = Read-Utf8TextFile (Join-Path $root "$bundle/Service/LoanLifecycleService.pm")
+$lifecyclePolicy = Read-Utf8TextFile (Join-Path $root "$bundle/Service/LifecyclePolicy.pm")
 $portalLoanReturnApplication = Read-Utf8TextFile (Join-Path $root "$bundle/Service/PortalLoanReturnApplication.pm")
 $loansController = Read-Utf8TextFile (Join-Path $root "$bundle/Controller/Loans.pm")
 Assert-Contract ($loanReturnService.Contains('RETURNED') -and $loanReturnService.Contains('insert_loan_returned_event') -and $loanReturnService.Contains('update_active_return') -and $loanReturnService.Contains('idempotent_replay') -and -not ($loanReturnService -match '\b(?:AddIssue|AddReturn|GetIssue)\b')) 'LoanReturnService returns ACTIVE loans without native Koha circulation mutation'
@@ -217,6 +219,8 @@ Assert-Contract ($eventRepository.Contains("event_type = 'LOAN_RETURNED'") -or $
 Assert-Contract ($portalLoanReturnApplication.Contains('PortalServiceAuthorization') -and -not $portalLoanReturnApplication.Contains('StaffDecisionAuthorization') -and $portalLoanReturnApplication.Contains('sub return_loan')) 'PortalLoanReturnApplication uses portal service authorization'
 Assert-Contract ($loansController.Contains('sub return_loan') -and $loansController.Contains('PortalLoanReturnApplication') -and $loansController.Contains('X-Correlation-ID') -and -not $loansController.Contains('StaffDecisionAuthorization')) 'loans controller exposes thin portal return adapter'
 Assert-Contract ($loanRepository.Contains('sub get_for_return') -and $loanRepository.Contains('sub update_active_return') -and $loanRepository.Contains('FOR UPDATE')) 'loan repository supports locked return reads and conditional ACTIVE updates'
+Assert-Contract ($loanLifecycleService.Contains('sub renew') -and $loanLifecycleService.Contains('sub revoke') -and $loanLifecycleService.Contains('sub expire_due') -and $loanLifecycleService.Contains('GET_LOCK') -and $loanLifecycleService.Contains("'renewed'") -and $loanLifecycleService.Contains("'revoked'") -and $loanLifecycleService.Contains("'expired'")) 'authoritative lifecycle service implements renewal, revocation, expiry, locking, and event insertion'
+Assert-Contract ($lifecyclePolicy.Contains('renewals_enabled') -and $lifecyclePolicy.Contains('staff_revocations_enabled') -and $lifecyclePolicy.Contains('automatic_expiry_enabled') -and $lifecyclePolicy.Contains('renewal_days') -and $lifecyclePolicy.Contains('maximum_renewals') -and $lifecyclePolicy.Contains('expiry_batch_size')) 'lifecycle policy owns all disabled-by-default controls and bounded policy values'
 $issuePost = $openapi.'/requests/{request_id}/issue'.post
 Assert-Contract ($issuePost.operationId -eq 'jzlIssueDigitalLoan' -and $issuePost.'x-mojo-to' -eq 'Com::JunaidZaidiLibrary::DigitalCirculation::Controller::Requests#issue') 'staff issuance OpenAPI route and controller operation agree'
 Assert-Contract ($issuePost.'x-koha-authorization'.permissions.circulate -eq 'circulate_remaining_permissions') 'staff issuance route declares established Koha permission'
@@ -282,7 +286,7 @@ if ($Kpz) {
     Assert-Contract ($names -contains "$bundle/tool.tt") 'archive contains tool.tt at bundle root'
     Assert-Contract ($names -contains "$bundle/configure.tt") 'archive contains configure.tt at bundle root'
     Assert-Contract (-not ($names | Where-Object { $_ -like 'Koha_Digital_Circulation_Plugin/*' })) 'archive has no extra repository directory'
-    Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.2.3';")) 'packaged internal plugin version is 0.2.3'
+    Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.3.0';")) 'packaged internal plugin version is 0.3.0'
     Assert-Contract ($packagedMain.Contains('sub _stamp_schema_state') -and $packagedMain.Contains('ON DUPLICATE KEY UPDATE') -and ($packagedMain -match 'plugin_version\s*=\s*VALUES\(plugin_version\)') -and -not $packagedMain.Contains('INSERT IGNORE INTO `$v`')) 'packaged upgrade path explicitly refreshes the plugin-version stamp'
     Assert-Contract ($packagedMain.Contains('Schema state must contain exactly one canonical row') -and $packagedMain.Contains('Schema version 1 was not recorded')) 'packaged upgrade path retains strict schema-state verification'
     Assert-Contract ($packagedMain.Contains("return 'jzl-digital-circulation';")) 'packaged API namespace is unchanged'
@@ -298,7 +302,7 @@ if ($Kpz) {
         }
     }
     Assert-Contract ($operationIds.Count -eq ($operationIds | Select-Object -Unique).Count) 'packaged OpenAPI operation IDs are unique'
-    Assert-Contract ($postRoutes.Count -eq 4 -and $postRoutes -contains '/requests' -and $postRoutes -contains '/requests/{request_id}/decision' -and $postRoutes -contains '/requests/{request_id}/issue' -and $postRoutes -contains '/loans/{loan_id}/return') 'packaged OpenAPI has exactly four POST routes including patron return'
+    Assert-Contract ($postRoutes.Count -eq 7 -and $postRoutes -contains '/requests' -and $postRoutes -contains '/requests/{request_id}/decision' -and $postRoutes -contains '/requests/{request_id}/issue' -and $postRoutes -contains '/loans/{loan_id}/return' -and $postRoutes -contains '/loans/{loan_id}/renew' -and $postRoutes -contains '/loans/{loan_id}/revoke' -and $postRoutes -contains '/maintenance/expire-loans') 'packaged OpenAPI has exactly seven required POST routes'
     Assert-Contract ($packagedOpenapi.'/loans/{loan_id}/return'.post.operationId -eq 'jzlReturnDigitalLoan') 'packaged return operation ID is correct'
     Assert-Contract ($packagedOpenapi.'/requests/{request_id}/issue'.post.operationId -eq 'jzlIssueDigitalLoan') 'packaged issuance operation ID is correct'
     $post = $packagedOpenapi.'/requests'.post
@@ -309,13 +313,13 @@ if ($Kpz) {
     Assert-Contract ($headerNames -contains 'Idempotency-Key' -and $headerNames -contains 'X-Correlation-ID') 'packaged required UUID headers are documented'
     Assert-Contract ($post.responses.'200' -and $post.responses.'201' -and $post.responses.'400' -and $post.responses.'401' -and $post.responses.'403' -and $post.responses.'404' -and $post.responses.'409' -and $post.responses.'500' -and $post.responses.'503') 'packaged request responses are complete'
     $packagedStaffUi = $packagedTool + "`n" + $packagedStaffJs
-    Assert-Contract ($packagedTool.Contains($phase2Boundary) -and $packagedTool.Contains('Approval alone does not create a loan') -and $packagedTool.Contains('does not grant protected-PDF reader access')) 'packaged staff tool states the Phase 2C decision and issuance boundary'
+    Assert-Contract ($packagedTool.Contains($phase2Boundary) -and $packagedTool.Contains('never create, renew, or return a native Koha checkout')) 'packaged staff tool states the authoritative/native circulation boundary'
     Assert-Contract ($packagedStaffJs.Contains("approve.textContent = 'Approve'") -and $packagedStaffJs.Contains("reject.textContent = 'Reject'") -and $packagedStaffJs.Contains("request.status === 'PENDING'")) 'packaged staff tool exposes Approve and Reject only for pending requests'
     Assert-Contract ($packagedStaffJs.Contains("issue.textContent = 'Issue Loan'") -and $packagedStaffJs.Contains('canIssueRequest(request)') -and $packagedStaffJs.Contains("'/issue'") -and $packagedStaffJs.Contains('submitIssuance')) 'packaged staff tool exposes Issue Loan for eligible approved requests'
     Assert-Contract ($packagedStaffJs.Contains("DECISION_PATH = '/requests/'") -and $packagedStaffJs.Contains("'/decision'") -and $packagedStaffJs.Contains("ISSUE_PATH = '/requests/'") -and $packagedStaffJs.Contains("method: 'POST'") -and $packagedStaffJs.Contains("credentials: 'same-origin'")) 'packaged staff decisions and issuance use only the same-origin verified REST endpoints'
     Assert-Contract ($packagedStaffJs.Contains("'X-Correlation-ID': correlationId") -and $packagedStaffJs.Contains('expected_row_version: version') -and $packagedStaffJs.Contains('window.crypto.randomUUID()') -and $packagedStaffJs.Contains('window.crypto.getRandomValues(bytes)')) 'packaged staff writes use a fresh secure correlation UUID and row version'
     Assert-Contract (-not $packagedStaffJs.Contains('innerHTML') -and -not $packagedStaffJs.Contains('Authorization') -and -not $packagedStaffUi.Contains('portal_service_account_ids') -and -not $packagedStaffJs.Contains('grantAccess') -and -not $packagedStaffJs.Contains('activateReader')) 'packaged staff UI contains no unsafe HTML, authorization header, portal allowlist, or reader access'
-    foreach ($control in @('Create','Delete','Return','Renew','Revoke','Edit')) {
+    foreach ($control in @('Create','Delete','Return','Renew','Edit')) {
         Assert-Contract (-not ($packagedTool -match ">\s*$control(?: Request)?\s*<") -and -not ($packagedStaffJs -match "\.textContent\s*=\s*['""]$control(?: Request)?['""]")) "packaged staff tool has no $control write control"
     }
     Assert-Contract ($names -contains "$bundle/Service/StaffLoanIssuanceApplication.pm" -and $names -contains "$bundle/Service/ConfiguredLoanPeriodPolicy.pm" -and $names -contains "$bundle/Service/LoanIssuanceService.pm") 'packaged archive includes Phase 2C issuance runtime modules'

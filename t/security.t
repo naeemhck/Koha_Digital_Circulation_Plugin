@@ -37,10 +37,14 @@ for my $path ( sort keys %{$api} ) {
 is_deeply(
     \@write_routes,
     [
+        'post /loans/{loan_id}/renew',
+        'post /loans/{loan_id}/return',
+        'post /loans/{loan_id}/revoke',
+        'post /maintenance/expire-loans',
         'post /requests',
         'post /requests/{request_id}/decision',
         'post /requests/{request_id}/issue',
     ],
-    'only request creation, staff decision, and staff issuance are mutation routes'
+    'only the seven authoritative digital-circulation operations are mutation routes'
 );
 done_testing;

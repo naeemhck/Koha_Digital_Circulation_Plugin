@@ -8,7 +8,7 @@ use PluginUpgradeFakes;
 my $plugin =
     bless {}, 'Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation';
 
-sub state {
+sub expected_state {
     my ($version) = @_;
     return {
         schema_version => 1,
@@ -61,21 +61,21 @@ sub run_with_dbh {
     return $result;
 }
 
-subtest 'fresh install writes one canonical 0.2.3 schema-1 state' => sub {
+subtest 'fresh install writes one canonical 0.3.0 schema-1 state' => sub {
     my $dbh = Local::PluginUpgradeDBH->new;
     ok run_with_dbh( 'install', $dbh ), 'fresh install succeeds';
     is scalar @{ $dbh->{schema_rows} }, 1, 'one canonical state row exists';
-    is_deeply $dbh->{schema_rows}[0], state('0.2.3'),
+    is_deeply $dbh->{schema_rows}[0], expected_state('0.3.0'),
         'fresh state records schema 1 and current plugin version';
     is_deeply [ grep { /^(?:begin|commit|rollback)$/ } @{ $dbh->{calls} } ],
         [qw(begin commit)], 'state write and verification commit';
 };
 
-subtest '0.2.2 to 0.2.3 upgrade preserves business data' => sub {
+subtest '0.2.3 to 0.3.0 upgrade preserves business data' => sub {
     my %business = business_data();
     my $dbh = Local::PluginUpgradeDBH->new(
         existing_tables => 1,
-        schema_rows     => [ state('0.2.2') ],
+        schema_rows     => [ expected_state('0.2.3') ],
         %business,
     );
     my $before = dclone(
@@ -86,7 +86,7 @@ subtest '0.2.2 to 0.2.3 upgrade preserves business data' => sub {
     );
     ok run_with_dbh( 'upgrade', $dbh ), 'prior-version upgrade succeeds';
     is scalar @{ $dbh->{schema_rows} }, 1, 'upgrade creates no duplicate row';
-    is_deeply $dbh->{schema_rows}[0], state('0.2.3'),
+    is_deeply $dbh->{schema_rows}[0], expected_state('0.3.0'),
         'plugin-version stamp advances while schema remains 1';
     is_deeply(
         { map { $_ => $dbh->{$_} } keys %{$before} },
@@ -95,11 +95,11 @@ subtest '0.2.2 to 0.2.3 upgrade preserves business data' => sub {
     );
 };
 
-subtest '0.2.3 replay is idempotent' => sub {
+subtest '0.3.0 replay is idempotent' => sub {
     my %business = business_data();
     my $dbh = Local::PluginUpgradeDBH->new(
         existing_tables => 1,
-        schema_rows     => [ state('0.2.3') ],
+        schema_rows     => [ expected_state('0.3.0') ],
         %business,
     );
     my $before = dclone(
@@ -147,7 +147,7 @@ subtest 'unsupported schema state fails closed and rolls back stamp' => sub {
 subtest 'version-stamp write failure rolls back and never verifies success' => sub {
     my $dbh = Local::PluginUpgradeDBH->new(
         existing_tables => 1,
-        schema_rows     => [ state('0.2.2') ],
+        schema_rows     => [ expected_state('0.2.2') ],
         stamp_error     => 'simulated version stamp failure',
         business_data(),
     );
@@ -156,7 +156,7 @@ subtest 'version-stamp write failure rolls back and never verifies success' => s
         local $SIG{__WARN__} = sub { $warning .= join '', @_ };
         ok !run_with_dbh( 'upgrade', $dbh ), 'stamp write failure fails upgrade';
     }
-    is_deeply $dbh->{schema_rows}, [ state('0.2.2') ],
+    is_deeply $dbh->{schema_rows}, [ expected_state('0.2.2') ],
         'failed write leaves prior stamp intact';
     ok grep( $_ eq 'rollback', @{ $dbh->{calls} } ), 'write failure rolls back';
     ok !grep( /WHERE schema_version = \? AND plugin_version = \?/,

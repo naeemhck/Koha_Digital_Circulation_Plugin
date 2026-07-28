@@ -31,6 +31,9 @@
     }
 
     var API_BASE = '/api/v1/contrib/jzl-digital-circulation';
+    var toolRoot = document.getElementById('main-content');
+    var staffRevocationsEnabled =
+        toolRoot && toolRoot.dataset.staffRevocationsEnabled === '1';
     var DECISION_PATH = '/requests/';
     var ISSUE_PATH = '/requests/';
     var MAX_REASON_LENGTH = 4096;
@@ -116,6 +119,17 @@
             'Digital circulation is temporarily unavailable.',
         INTERNAL_ERROR:
             'The digital loan could not be issued because of an internal error.'
+    };
+    var REVOCATION_ERROR_MESSAGES = {
+        INVALID_INPUT: 'Enter a plain-text revocation reason from 3 to 500 characters.',
+        AUTHENTICATION_REQUIRED: 'Your Koha session has expired. Sign in again before continuing.',
+        STAFF_NOT_AUTHORIZED: 'You are not authorized to revoke digital loans.',
+        STAFF_REVOCATIONS_DISABLED: 'Digital-loan revocation is not enabled.',
+        LOAN_NOT_FOUND: 'This digital loan no longer exists.',
+        LOAN_NOT_REVOCABLE: 'This loan is no longer active and cannot be revoked.',
+        VERSION_CONFLICT: 'This loan changed after the page was loaded. The list will be refreshed.',
+        DIGITAL_CIRCULATION_UNAVAILABLE: 'Digital circulation is temporarily unavailable.',
+        INTERNAL_ERROR: 'The revocation result is uncertain. Refresh before trying again.'
     };
 
     var tabs = document.querySelectorAll('.jzl-tab');
@@ -943,13 +957,98 @@
         columns.forEach(function (column) {
             appendHeader(headerRow, title(column));
         });
+        if (resource === 'loans' && staffRevocationsEnabled) {
+            appendHeader(headerRow, 'Actions');
+        }
         table.tHead.appendChild(headerRow);
         displayRows.forEach(function (record) {
             var row = document.createElement('tr');
             columns.forEach(function (column) {
                 appendTextCell(row, record[column]);
             });
+            if (resource === 'loans' && staffRevocationsEnabled) {
+                var actionCell = document.createElement('td');
+                if (record.status === 'ACTIVE' &&
+                    positiveInteger(record.loan_id) &&
+                    positiveInteger(record.row_version)) {
+                    var revoke = document.createElement('button');
+                    revoke.type = 'button';
+                    revoke.className = 'btn btn-danger btn-sm';
+                    revoke.textContent = inFlight['revoke-' + record.loan_id]
+                        ? 'Revoking...'
+                        : 'Revoke Digital Loan';
+                    revoke.disabled = !!inFlight['revoke-' + record.loan_id];
+                    revoke.setAttribute('aria-label', 'Revoke digital loan ' + text(record.loan_id));
+                    revoke.addEventListener('click', function () {
+                        confirmRevocation(record, revoke);
+                    });
+                    actionCell.appendChild(revoke);
+                } else {
+                    actionCell.textContent = 'No revocation actions';
+                }
+                row.appendChild(actionCell);
+            }
             table.tBodies[0].appendChild(row);
+        });
+    }
+
+    function confirmRevocation(loan, trigger) {
+        var reason = window.prompt(
+            'Revoke digital loan ' + text(loan.loan_id) +
+            '? Enter the required plain-text reason (3-500 characters).'
+        );
+        if (reason === null) {
+            return;
+        }
+        reason = reason.trim();
+        if (reason.length < 3 || reason.length > 500 ||
+            /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(reason)) {
+            showPageError(REVOCATION_ERROR_MESSAGES.INVALID_INPUT);
+            return;
+        }
+        if (!window.confirm('Confirm immediate withdrawal of access to this digital loan.')) {
+            return;
+        }
+        var key = 'revoke-' + loan.loan_id;
+        if (inFlight[key]) {
+            return;
+        }
+        inFlight[key] = true;
+        trigger.disabled = true;
+        trigger.textContent = 'Revoking...';
+        fetch(API_BASE + '/loans/' + encodeURIComponent(String(loan.loan_id)) + '/revoke', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Correlation-ID': uuid()
+            },
+            body: JSON.stringify({
+                expected_row_version: Number(loan.row_version),
+                reason: reason
+            })
+        }).then(function (response) {
+            return response.json().catch(function () { return {}; }).then(function (body) {
+                if (!response.ok) {
+                    throw new Error(body && body.error && body.error.code || 'INTERNAL_ERROR');
+                }
+                return body;
+            });
+        }).then(function (body) {
+            if (!body.loan || body.loan.status !== 'REVOKED' ||
+                Number(body.loan.loan_id) !== Number(loan.loan_id)) {
+                throw new Error('INTERNAL_ERROR');
+            }
+            showNotification('Digital loan revoked. Reader access ends immediately.');
+        }).catch(function (error) {
+            showPageError(
+                REVOCATION_ERROR_MESSAGES[error.message] ||
+                REVOCATION_ERROR_MESSAGES.INTERNAL_ERROR
+            );
+        }).then(function () {
+            delete inFlight[key];
+            load();
         });
     }
 

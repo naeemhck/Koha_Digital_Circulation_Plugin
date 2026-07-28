@@ -5,3 +5,10 @@ Koha plugin routes call read-only controllers, which call allowlisted repositori
 The API/OpenAPI loader is the native Koha 26.05 plugin route mechanism. Navigation uses the official page-aware `intranet_js` hook only on `circulation-home.pl`; it inserts a single **Digital Circulation** link (`#jzl-digital-circulation-shortcut`) into the Circulation actions list (`.circulation-actions ul.buttons-list`, with legacy `#circ-menu ul` / `nav[aria-label="Circulation"] ul` fallbacks). The link opens the existing plugin `method=tool` entry via a root-relative `/cgi-bin/koha/plugins/run.pl?...` URL (no host/port). Duplicate insertion is guarded by the stable element ID. Shortcut visibility is not authorization; the tool enforces `circulate_remaining_permissions` server-side. This minimal DOM insertion is the only release-sensitive detail and must be regression-tested after a Koha template update. No Koha core templates are patched.
 
 Runtime package paths, including the root-level `tool.tt` required by `get_template`, are documented in `PACKAGE_LAYOUT.md`.
+
+Phase 5 adds transactional authoritative renewal, staff revocation, and
+database-clock expiry behind disabled-by-default controls. Repository row
+locks, optimistic versions, correlation replay, and a scoped expiry named lock
+serialize competing lifecycle actions. The portal remains a shadow and
+orchestrator; native Koha circulation is not mutated. See
+[PHASE5_AUTHORITATIVE_LOAN_LIFECYCLE.md](PHASE5_AUTHORITATIVE_LOAN_LIFECYCLE.md).

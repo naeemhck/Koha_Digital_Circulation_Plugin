@@ -11,9 +11,10 @@ use Mojo::JSON qw(decode_json);
 
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::ConfiguredLoanPeriodPolicy;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LoanIssuanceService;
+use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LifecyclePolicy;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalServiceAuthorization;
 
-our $VERSION             = '0.2.3';
+our $VERSION             = '0.3.0';
 our $SCHEMA_VERSION      = 1;
 our $TESTED_KOHA_VERSION = '26.05.01.000';
 
@@ -382,6 +383,7 @@ sub configure {
     my $cgi = $self->{cgi};
     my $authorization = $self->_configuration_authorization;
     my $loan_period_policy = $self->_configuration_loan_period_policy;
+    my $lifecycle_policy = $self->_configuration_lifecycle_policy;
     my $tokenizer = $self->_configuration_tokenizer;
     my $session_id = eval { $cgi->cookie('CGISESSID') } // '';
     my ( $message, $error );
@@ -411,6 +413,14 @@ sub configure {
             my $duration_result = $loan_period_policy->store_config(
                 scalar( $cgi->param('default_loan_duration_days') // '' )
             );
+            my $lifecycle_result = $lifecycle_policy->store_config(
+                renewals_enabled => scalar($cgi->param('renewals_enabled')) ? 1 : 0,
+                staff_revocations_enabled => scalar($cgi->param('staff_revocations_enabled')) ? 1 : 0,
+                automatic_expiry_enabled => scalar($cgi->param('automatic_expiry_enabled')) ? 1 : 0,
+                renewal_days => scalar($cgi->param('renewal_days') // ''),
+                maximum_renewals => scalar($cgi->param('maximum_renewals') // ''),
+                expiry_batch_size => scalar($cgi->param('expiry_batch_size') // ''),
+            );
 
             my @errors;
             my @messages;
@@ -430,6 +440,16 @@ sub configure {
             }
             else {
                 push @errors, 'The configuration could not be saved safely.';
+            }
+
+            if ($lifecycle_result->{stored}) {
+                push @messages, 'Authoritative loan lifecycle policy saved.';
+            }
+            elsif (($lifecycle_result->{code} // '') eq 'INVALID_LIFECYCLE_CONFIGURATION') {
+                push @errors, 'Enter safe lifecycle values: renewal days 1 to 365, maximum renewals 0 to 100, and expiry batch size 1 to 500.';
+            }
+            else {
+                push @errors, 'The lifecycle configuration could not be saved safely.';
             }
 
             if ( $duration_result->{stored} ) {
@@ -482,6 +502,14 @@ sub configure {
     my $csrf_token = eval {
         $tokenizer->generate_csrf( { session_id => $session_id } );
     };
+
+    my $lifecycle_current = $lifecycle_policy->load_config;
+    my $lifecycle_settings = $lifecycle_current->{settings}
+        || $lifecycle_policy->defaults;
+    unless ($lifecycle_current->{loaded}) {
+        $message = undef;
+        $error ||= 'The lifecycle configuration could not be loaded safely; disabled defaults are shown.';
+    }
     unless ( defined $csrf_token && !ref $csrf_token ) {
         $csrf_token = '';
         $message = undef;
@@ -495,6 +523,7 @@ sub configure {
         error                      => $error,
         portal_service_account_ids => $allowlist_value,
         default_loan_duration_days => $duration_value,
+        %{$lifecycle_settings},
     );
     return $self->output_html( $template->output );
 }
@@ -530,6 +559,13 @@ sub _configuration_loan_period_policy {
     );
 }
 
+sub _configuration_lifecycle_policy {
+    my ($self) = @_;
+    return Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LifecyclePolicy->new(
+        plugin => $self
+    );
+}
+
 sub _configuration_tokenizer {
     return Koha::Token->new;
 }
@@ -548,11 +584,15 @@ sub _staff_allowed {
 sub tool {
     my ($self) = @_;
     my $template = $self->get_template( { file => 'tool.tt' } );
+    my $lifecycle = $self->_configuration_lifecycle_policy->load_config;
+    my $settings = $lifecycle->{settings}
+        || $self->_configuration_lifecycle_policy->defaults;
     $template->param(
         authorized     => _staff_allowed(),
         plugin_version => $VERSION,
         schema_version => $SCHEMA_VERSION,
         tested_koha    => $TESTED_KOHA_VERSION,
+        staff_revocations_enabled => $settings->{staff_revocations_enabled} ? 1 : 0,
     );
     return $self->output_html( $template->output );
 }

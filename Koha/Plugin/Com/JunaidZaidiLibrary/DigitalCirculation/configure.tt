@@ -45,6 +45,39 @@
       </ol>
     </fieldset>
     <fieldset class="rows">
+      <legend>Authoritative loan lifecycle</legend>
+      <ol>
+        <li>
+          <label for="renewals_enabled">Patron renewals</label>
+          <input id="renewals_enabled" name="renewals_enabled" type="checkbox" value="1" [% IF renewals_enabled %]checked[% END %]>
+          <span class="hint">Disabled by default. Portal renewal also requires its portal feature flag.</span>
+        </li>
+        <li>
+          <label for="staff_revocations_enabled">Staff revocations</label>
+          <input id="staff_revocations_enabled" name="staff_revocations_enabled" type="checkbox" value="1" [% IF staff_revocations_enabled %]checked[% END %]>
+          <span class="hint">Disabled by default. Authorized circulation staff may revoke ACTIVE digital loans.</span>
+        </li>
+        <li>
+          <label for="automatic_expiry_enabled">Automatic expiry</label>
+          <input id="automatic_expiry_enabled" name="automatic_expiry_enabled" type="checkbox" value="1" [% IF automatic_expiry_enabled %]checked[% END %]>
+          <span class="hint">Disabled by default. The portal scheduler must also be enabled.</span>
+        </li>
+        <li>
+          <label for="renewal_days">Renewal extension (days)</label>
+          <input id="renewal_days" name="renewal_days" type="number" min="1" max="365" step="1" required value="[% renewal_days | html %]">
+          <span class="hint">Added to the existing authoritative due date, never to the current time.</span>
+        </li>
+        <li>
+          <label for="maximum_renewals">Maximum renewals</label>
+          <input id="maximum_renewals" name="maximum_renewals" type="number" min="0" max="100" step="1" required value="[% maximum_renewals | html %]">
+        </li>
+        <li>
+          <label for="expiry_batch_size">Expiry batch size</label>
+          <input id="expiry_batch_size" name="expiry_batch_size" type="number" min="1" max="500" step="1" required value="[% expiry_batch_size | html %]">
+        </li>
+      </ol>
+    </fieldset>
+    <fieldset class="rows">
       <legend>Digital loan period</legend>
       <ol>
         <li>

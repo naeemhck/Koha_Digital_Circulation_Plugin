@@ -199,6 +199,120 @@ sub get_for_return {
     };
 }
 
+sub get_for_lifecycle {
+    my ( $self, @args ) = @_;
+    return $self->get_for_return(@args);
+}
+
+sub database_utc {
+    my ( $self, $dbh ) = @_;
+    return $dbh->selectrow_array(
+        q{SELECT DATE_FORMAT(UTC_TIMESTAMP(), '%Y-%m-%d %H:%i:%s')}
+    );
+}
+
+sub update_active_renewal {
+    my ( $self, $dbh, %args ) = @_;
+    my $days = $args{renewal_days};
+    die 'INVALID_RENEWAL_DAYS'
+        unless defined($days) && !ref($days) && $days =~ /\A[1-9][0-9]*\z/ && $days <= 365;
+    my $table = $self->{table_name};
+    my $affected = $dbh->do(
+        qq{
+            UPDATE `$table`
+               SET due_at = DATE_ADD(due_at, INTERVAL $days DAY),
+                   renewal_count = renewal_count + 1,
+                   row_version = row_version + 1,
+                   updated_at = UTC_TIMESTAMP()
+             WHERE loan_id = ?
+               AND status = 'ACTIVE'
+               AND row_version = ?
+               AND due_at > UTC_TIMESTAMP()
+               AND renewal_count < ?
+               AND returned_at IS NULL
+               AND revoked_at IS NULL
+               AND expired_at IS NULL
+        },
+        undef,
+        0 + $args{loan_id},
+        0 + $args{expected_row_version},
+        0 + $args{maximum_renewals},
+    );
+    return defined($affected) && !ref($affected) && $affected == 1 ? 1 : 0;
+}
+
+sub update_active_revocation {
+    my ( $self, $dbh, %args ) = @_;
+    my $table = $self->{table_name};
+    my $affected = $dbh->do(
+        qq{
+            UPDATE `$table`
+               SET status = 'REVOKED',
+                   revoked_at = UTC_TIMESTAMP(),
+                   row_version = row_version + 1,
+                   updated_at = UTC_TIMESTAMP()
+             WHERE loan_id = ?
+               AND status = 'ACTIVE'
+               AND row_version = ?
+               AND returned_at IS NULL
+               AND revoked_at IS NULL
+               AND expired_at IS NULL
+        },
+        undef,
+        0 + $args{loan_id},
+        0 + $args{expected_row_version},
+    );
+    return defined($affected) && !ref($affected) && $affected == 1 ? 1 : 0;
+}
+
+sub list_due_for_expiry {
+    my ( $self, $dbh, %args ) = @_;
+    my $limit = $args{limit};
+    die 'INVALID_EXPIRY_LIMIT'
+        unless defined($limit) && !ref($limit) && $limit =~ /\A[1-9][0-9]*\z/ && $limit <= 500;
+    my $table = $self->{table_name};
+    return $dbh->selectall_arrayref(
+        qq{
+            SELECT loan_id
+              FROM `$table`
+             WHERE status = 'ACTIVE'
+               AND due_at <= UTC_TIMESTAMP()
+               AND returned_at IS NULL
+               AND revoked_at IS NULL
+               AND expired_at IS NULL
+             ORDER BY due_at ASC, loan_id ASC
+             LIMIT $limit
+             FOR UPDATE
+        },
+        { Slice => {} },
+    );
+}
+
+sub update_active_expiry {
+    my ( $self, $dbh, %args ) = @_;
+    my $table = $self->{table_name};
+    my $affected = $dbh->do(
+        qq{
+            UPDATE `$table`
+               SET status = 'EXPIRED',
+                   expired_at = UTC_TIMESTAMP(),
+                   row_version = row_version + 1,
+                   updated_at = UTC_TIMESTAMP()
+             WHERE loan_id = ?
+               AND status = 'ACTIVE'
+               AND row_version = ?
+               AND due_at <= UTC_TIMESTAMP()
+               AND returned_at IS NULL
+               AND revoked_at IS NULL
+               AND expired_at IS NULL
+        },
+        undef,
+        0 + $args{loan_id},
+        0 + $args{expected_row_version},
+    );
+    return defined($affected) && !ref($affected) && $affected == 1 ? 1 : 0;
+}
+
 sub update_active_return {
     my ( $self, $dbh, %args ) = @_;
     my $table = $self->{table_name};

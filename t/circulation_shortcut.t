@@ -15,7 +15,7 @@ my $js   = slurp("$bundle/static/js/jzl-digital-circulation.js");
 
 like $main, qr/sub intranet_head/, 'intranet_head hook remains defined';
 like $main, qr/sub intranet_js/,   'intranet_js hook remains defined';
-like $main, qr/circulation-home\.pl\\z/,
+like $main, qr/circulation-home\\\.pl\\z/,
     'shortcut script is limited to circulation-home.pl';
 like $main,
     qr{/cgi-bin/koha/plugins/run\.pl\?class=Koha%3A%3APlugin%3A%3ACom%3A%3AJunaidZaidiLibrary%3A%3ADigitalCirculation&method=tool},

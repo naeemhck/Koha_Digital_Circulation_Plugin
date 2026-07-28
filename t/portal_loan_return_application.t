@@ -57,7 +57,7 @@ sub fake_service {
             ok                => 1,
             loan              => returned_loan(),
             idempotent_replay => 0,
-            correlation_id    => 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff0091',
+            correlation_id    => 'bbbbbbbb-cccc-4ddd-8eee-ffffffff0091',
         },
         error => $args{error},
         calls => [],
@@ -86,12 +86,12 @@ sub app {
 sub command {
     my (%overrides) = @_;
     return (
-        controller           => bless {}, 'Fake::Controller',
+        controller           => ( bless {}, 'Fake::Controller' ),
         loan_id              => 31,
         patron_id            => 157,
         portal_request_id    => 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeee0091',
         expected_row_version => 1,
-        correlation_id       => 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff0091',
+        correlation_id       => 'bbbbbbbb-cccc-4ddd-8eee-ffffffff0091',
         %overrides,
     );
 }
