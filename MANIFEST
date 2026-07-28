@@ -1,3 +1,4 @@
+MANIFEST
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/openapi.json
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Controller/Assets.pm

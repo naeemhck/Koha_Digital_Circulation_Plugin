@@ -973,7 +973,7 @@ def check_archive(path: pathlib.Path) -> None:
             for name in names
             if re.search(
                 r"(^|/)(\.git|t|diagnostics|node_modules|vendor|coverage|test-results|__pycache__)(/|$)"
-                r"|(^|/)\.env($|\.)|\.(?:kpz|db|sqlite|sql|swp|pyc)$|~$|\.before-diagnostic$",
+                r"|(^|/)\.env($|\.)|\.(?:kpz|dump|backup|key|pem|pdf|db|sqlite|sql|swp|pyc)$|~$|\.before-diagnostic$",
                 name,
                 re.I,
             )
@@ -981,9 +981,10 @@ def check_archive(path: pathlib.Path) -> None:
         require(names == manifest, "archive tree exactly matches MANIFEST")
         require(not bad, "archive excludes secrets, dumps, caches, backups, and nested KPZ files")
         require(
-            all(name.startswith("Koha/") and "\\" not in name for name in names),
-            "archive uses package-relative Unix paths",
+            all((name == "MANIFEST" or name.startswith("Koha/")) and "\\" not in name for name in names),
+            "archive uses package-relative Unix paths with one root MANIFEST",
         )
+        require("MANIFEST" in names, "archive contains root MANIFEST")
         require(names.count(f"{BUNDLE_MANIFEST}.pm") == 1, "archive has one plugin root")
         require(f"{BUNDLE_MANIFEST}/tool.tt" in names, "archive contains tool.tt at bundle root")
         require(f"{BUNDLE_MANIFEST}/configure.tt" in names, "archive contains configure.tt at bundle root")

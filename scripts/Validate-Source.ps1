@@ -267,9 +267,10 @@ if ($Kpz) {
     finally { $archive.Dispose() }
     $expected = @($manifest | Sort-Object)
     Assert-Contract ((Compare-Object $expected $names).Count -eq 0) 'archive tree exactly matches MANIFEST'
-    $bad = @($names | Where-Object { $_ -match '(^|/)(\.git|t|diagnostics|node_modules|vendor|coverage|test-results|__pycache__)(/|$)|(^|/)\.env($|\.)|\.(kpz|db|sqlite|sql|swp|pyc)$|~$|\.before-diagnostic$' })
+    $bad = @($names | Where-Object { $_ -match '(^|/)(\.git|t|diagnostics|node_modules|vendor|coverage|test-results|__pycache__)(/|$)|(^|/)\.env($|\.)|\.(kpz|dump|backup|key|pem|pdf|db|sqlite|sql|swp|pyc)$|~$|\.before-diagnostic$' })
     Assert-Contract ($bad.Count -eq 0) 'archive excludes secrets, dumps, caches, backups, and nested KPZ files'
-    Assert-Contract (-not ($names | Where-Object { $_ -notmatch '^Koha/' -or $_ -match '\\' })) 'archive uses package-relative Unix paths'
+    Assert-Contract (-not ($names | Where-Object { ($_ -ne 'MANIFEST' -and $_ -notmatch '^Koha/') -or $_ -match '\\' })) 'archive uses package-relative Unix paths with one root MANIFEST'
+    Assert-Contract ($names -contains 'MANIFEST') 'archive contains root MANIFEST'
     Assert-Contract (($names | Where-Object { $_ -eq "$bundle.pm" }).Count -eq 1) 'archive has one plugin root'
     Assert-Contract ($names -contains "$bundle/tool.tt") 'archive contains tool.tt at bundle root'
     Assert-Contract ($names -contains "$bundle/configure.tt") 'archive contains configure.tt at bundle root'
