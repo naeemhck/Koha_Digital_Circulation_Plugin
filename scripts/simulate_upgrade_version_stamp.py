@@ -17,7 +17,7 @@ SOURCE = (
     / "JunaidZaidiLibrary"
     / "DigitalCirculation.pm"
 ).read_text(encoding="utf-8")
-CURRENT_VERSION = "0.3.0"
+CURRENT_VERSION = "0.3.1"
 
 
 def require_source_contract() -> None:
@@ -212,7 +212,7 @@ def run() -> dict[str, str]:
 
     return {
         "fresh_install": "PASS",
-        "upgrade_0.2.3_to_0.3.0": "PASS",
+        "upgrade_0.3.0_to_0.3.1": "PASS",
         "idempotent_replay": "PASS",
         "invalid_schema_rollback": "PASS",
         "write_failure_rollback": "PASS",

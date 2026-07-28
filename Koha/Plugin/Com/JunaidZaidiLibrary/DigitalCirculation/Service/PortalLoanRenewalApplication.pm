@@ -32,8 +32,8 @@ sub renew {
     return { ok => 0, code => $auth->{code} || 'SERVICE_ACCOUNT_NOT_AUTHORIZED' }
         unless $auth->{allowed};
     return $self->{service}->renew(
-        map { $_ => $args{$_} }
-            qw(loan_id patron_id portal_request_id expected_row_version correlation_id),
+        ( map { $_ => $args{$_} }
+            qw(loan_id patron_id portal_request_id expected_row_version correlation_id) ),
         actor_id => $auth->{actor_id},
     );
 }

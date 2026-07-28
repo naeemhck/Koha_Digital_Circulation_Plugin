@@ -1,7 +1,7 @@
 # Phase 5 authoritative loan lifecycle
 
 Phase 5 completes the plugin-owned digital-loan lifecycle without changing
-plugin version `0.3.0`, schema version `1`, the namespace, or native Koha
+plugin version `0.3.1`, schema version `1`, the namespace, or native Koha
 circulation. This implementation was prepared in an isolated worktree and was
 not packaged, installed, enabled, or exercised against live business data.
 

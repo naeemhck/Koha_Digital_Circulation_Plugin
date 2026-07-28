@@ -14,7 +14,7 @@ use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LoanIssu
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LifecyclePolicy;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalServiceAuthorization;
 
-our $VERSION             = '0.3.0';
+our $VERSION             = '0.3.1';
 our $SCHEMA_VERSION      = 1;
 our $TESTED_KOHA_VERSION = '26.05.01.000';
 

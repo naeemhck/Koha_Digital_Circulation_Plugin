@@ -7,9 +7,9 @@ Installed plugin inspected: `Koha::Plugin::Com::Ecombranding::EbookContent` v0.1
 Minimum intended release is 26.05.00.000. Only 26.05.01.000 is tested. Later 26.05 maintenance releases require regression testing; 26.11+ is unsupported until tested.
 
 Digital Circulation plugin version covered by this compatibility claim is
-**0.3.0** (schema 1), with EbookContent **0.1.2** as the protected-content
+**0.3.1** (schema 1), with EbookContent **0.1.2** as the protected-content
 dependency. See [TEAMMATE_HANDOFF.md](TEAMMATE_HANDOFF.md) for continuation
-guidance. Release **0.3.0** combines the Circulation staff shortcut for the Koha
+guidance. Release **0.3.1** combines the Circulation staff shortcut for the Koha
 26.05 `.circulation-actions` button list with the Phase 4B authoritative
 patron-return endpoint. It does not change schema version 1 or native Koha
 circulation.

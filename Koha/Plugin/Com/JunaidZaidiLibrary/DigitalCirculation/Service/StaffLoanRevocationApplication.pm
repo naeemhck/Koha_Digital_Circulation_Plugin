@@ -31,8 +31,8 @@ sub revoke {
     return { ok => 0, code => $auth->{code} || 'STAFF_NOT_AUTHORIZED' }
         unless $auth->{allowed};
     return $self->{service}->revoke(
-        map { $_ => $args{$_} }
-            qw(loan_id expected_row_version correlation_id reason),
+        ( map { $_ => $args{$_} }
+            qw(loan_id expected_row_version correlation_id reason) ),
         actor_id => $auth->{actor_id},
     );
 }
