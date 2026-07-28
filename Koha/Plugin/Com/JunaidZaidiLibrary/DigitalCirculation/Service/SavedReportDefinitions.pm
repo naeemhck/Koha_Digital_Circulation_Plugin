@@ -8,7 +8,7 @@ use constant GROUP_LABEL    => 'Digital Circulation';
 use constant SUBGROUP_CODE  => 'EBOOKS';
 use constant SUBGROUP_LABEL => 'eBooks';
 use constant REPORT_AREA    => 'CIRC';
-use constant DEFINITION_VERSION => 2;
+use constant DEFINITION_VERSION => 3;
 
 sub new {
     my ( $class, %args ) = @_;
@@ -578,6 +578,11 @@ ORDER BY evt.occurred_at DESC, evt.event_id DESC
                 . "            SELECT DISTINCT bi.biblionumber, bi.itemtype AS item_type\n"
                 . "            FROM biblioitems bi\n"
                 . "            WHERE COALESCE((SELECT value FROM systempreferences WHERE variable = 'item-level_itypes'), '0') <> '1'\n"
+                . "               OR NOT EXISTS (\n"
+                . "                    SELECT 1 FROM items mapped_item\n"
+                . "                    WHERE mapped_item.biblionumber = bi.biblionumber\n"
+                . "                      AND COALESCE(mapped_item.itype, '') <> ''\n"
+                . "               )\n"
                 . "        ) catalogue_item_types\n"
                 . "        WHERE catalogue_item_types.biblionumber = $column\n"
                 . "          AND catalogue_item_types.item_type = <<Item type|itemtypes>>\n"

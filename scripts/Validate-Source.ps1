@@ -30,7 +30,7 @@ function Read-ArchiveText($Archive, [string]$Name) {
     finally { $reader.Dispose() }
 }
 
-Assert-Contract ($source.Contains("our `$VERSION             = '0.4.1';")) 'plugin version is 0.4.1'
+Assert-Contract ($source.Contains("our `$VERSION             = '0.4.2';")) 'plugin version is 0.4.2'
 Assert-Contract ($source.Contains('our $SCHEMA_VERSION      = 1;')) 'schema version remains 1'
 Assert-Contract ($source.Contains("minimum_version => '26.05.00.000'")) 'minimum Koha version remains 26.05.00.000'
 
@@ -258,7 +258,7 @@ if ($Kpz) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $resolvedKpz = Resolve-Path $Kpz
     Assert-Contract (
-        (Split-Path -Leaf $resolvedKpz) -match '^JunaidZaidiLibrary-DigitalCirculation-v0\.4\.1(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?\.kpz$'
+        (Split-Path -Leaf $resolvedKpz) -match '^JunaidZaidiLibrary-DigitalCirculation-v0\.4\.2(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?\.kpz$'
     ) 'archive filename matches internal plugin version'
     Assert-Contract ((Get-Item $resolvedKpz).Length -ge 10000) 'archive is not suspiciously small'
     $archive = [IO.Compression.ZipFile]::OpenRead($resolvedKpz)
@@ -287,7 +287,7 @@ if ($Kpz) {
     Assert-Contract ($names -contains "$bundle/tool.tt") 'archive contains tool.tt at bundle root'
     Assert-Contract ($names -contains "$bundle/configure.tt") 'archive contains configure.tt at bundle root'
     Assert-Contract (-not ($names | Where-Object { $_ -like 'Koha_Digital_Circulation_Plugin/*' })) 'archive has no extra repository directory'
-    Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.4.1';")) 'packaged internal plugin version is 0.4.1'
+    Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.4.2';")) 'packaged internal plugin version is 0.4.2'
     Assert-Contract ($packagedMain.Contains('sub _stamp_schema_state') -and $packagedMain.Contains('ON DUPLICATE KEY UPDATE') -and ($packagedMain -match 'plugin_version\s*=\s*VALUES\(plugin_version\)') -and -not $packagedMain.Contains('INSERT IGNORE INTO `$v`')) 'packaged upgrade path explicitly refreshes the plugin-version stamp'
     Assert-Contract ($packagedMain.Contains('Schema state must contain exactly one canonical row') -and $packagedMain.Contains('Schema version 1 was not recorded')) 'packaged upgrade path retains strict schema-state verification'
     Assert-Contract ($packagedMain.Contains("return 'jzl-digital-circulation';")) 'packaged API namespace is unchanged'
