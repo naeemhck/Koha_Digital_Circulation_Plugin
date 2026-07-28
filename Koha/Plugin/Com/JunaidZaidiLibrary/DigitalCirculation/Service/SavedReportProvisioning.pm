@@ -32,6 +32,28 @@ sub _same_definition {
     return 1;
 }
 
+# SHA-256 values of the unmodified v0.4.0 canonical SQL definitions.  This is
+# deliberately narrower than a definition-version check: a librarian edit to
+# a v0.4.0 managed report remains drift and is never overwritten implicitly.
+sub _is_unmodified_v040 {
+    my ( $self, $row, $slug ) = @_;
+    my %legacy_sql = (
+        active_loans             => 'e4eea64a983d45d7b8608236b7afff47b21dc71926462e109324f31347abb158',
+        audit_trail              => 'b41410d3cda03af24f5625807d59651b7233e50e4acafb80e207cff5c21adc5d',
+        completed_loans          => '3867fcaa89de508b77763f7afd1cbbbf054a75c338a85e289a017c35e59e6428',
+        department_usage         => '06ecde03387d14661ae4f83a3d60f75c26e0e0d3936bce19583670d38771e3a1',
+        lifecycle_summary        => '426fad262f3e894ca3650b798caca7157f757705be28296a3c1fbdaa7520cdb2',
+        most_used_titles         => '55c028850ea6fe0cc111f77adcb463bee53f6d36ec86415ab4658a78656df289',
+        renewal_activity         => '86ecacbd9b4c7bb637675def438abfeb91508206aca10d0ba9b177f844953433',
+        request_history          => '803642bb71c2872be2c8f11cd5050a03e770fbba95feac5dca0716259432ca01',
+        requests_awaiting_action => 'dea194ff69496e8012ea047062f270071c5a1f08ff8092e31d26072299d45ad7',
+        staff_activity           => '4fe0b42a13430dcdb82cdcb14ea7aaf8b3a011fa7ba82102864d19eef68b311a',
+    );
+    return 0 unless $legacy_sql{$slug};
+    return 0 unless ($row->{notes} // '') =~ /\bdefinition_version=1;/;
+    return sha256_hex( $row->{savedsql} // '' ) eq $legacy_sql{$slug};
+}
+
 sub inspect {
     my ($self) = @_;
     my $repository = $self->{repository};
@@ -57,7 +79,7 @@ sub inspect {
         push @{ $rows{$slug // '__invalid__'} }, $row;
     }
 
-    my ( @missing, @drifted, @duplicates, @installed, @unknown );
+    my ( @missing, @drifted, @duplicates, @installed, @upgradeable, @unknown );
     for my $slug ( sort keys %$by_slug ) {
         my $matches = $rows{$slug} || [];
         if (!@$matches) {
@@ -66,6 +88,8 @@ sub inspect {
             push @duplicates, $slug;
         } elsif ($self->_same_definition( $matches->[0], $by_slug->{$slug} )) {
             push @installed, $slug;
+        } elsif ( $self->_is_unmodified_v040( $matches->[0], $slug ) ) {
+            push @upgradeable, $slug;
         } else {
             push @drifted, $slug;
         }
@@ -79,6 +103,7 @@ sub inspect {
     return {
         expected_count  => scalar(@$reports),
         installed_count => scalar(@installed),
+        upgradeable     => \@upgradeable,
         missing         => \@missing,
         drifted         => \@drifted,
         duplicates      => \@duplicates,
@@ -125,6 +150,7 @@ sub provision {
 
         my %missing = map { $_ => 1 } @{ $status->{missing} };
         my %drifted = map { $_ => 1 } @{ $status->{drifted} };
+        my %upgradeable = map { $_ => 1 } @{ $status->{upgradeable} };
         for my $definition ( @{ $definitions->reports } ) {
             if ( $missing{$definition->{slug}} ) {
                 $repository->create_report(
@@ -135,7 +161,7 @@ sub provision {
                     subgroup_code => $definition->{subgroup_code},
                 );
                 $changed++;
-            } elsif ( $repair && $drifted{$definition->{slug}} ) {
+            } elsif ( $upgradeable{$definition->{slug}} || ( $repair && $drifted{$definition->{slug}} ) ) {
                 my $row = $status->{rows_by_slug}{ $definition->{slug} }->[0];
                 $repository->update_report(
                     id => $row->{id}, sql => $definition->{sql}, name => $definition->{name},

@@ -8,7 +8,7 @@ use constant GROUP_LABEL    => 'Digital Circulation';
 use constant SUBGROUP_CODE  => 'EBOOKS';
 use constant SUBGROUP_LABEL => 'eBooks';
 use constant REPORT_AREA    => 'CIRC';
-use constant DEFINITION_VERSION => 1;
+use constant DEFINITION_VERSION => 2;
 
 sub new {
     my ( $class, %args ) = @_;
@@ -563,26 +563,26 @@ ORDER BY evt.occurred_at DESC, evt.event_id DESC
         push @{ $definition->{parameters} },
             { name => 'Item type', type => 'itemtypes', required => 0 };
 
-        my $catalogue_item_types = q{
-catalogue_item_types AS (
-    SELECT DISTINCT item_map.biblionumber, item_map.item_type
-    FROM (
-        SELECT item.biblionumber, item.itype AS item_type
-        FROM items item
-        WHERE COALESCE((SELECT value FROM systempreferences WHERE variable = 'item-level_itypes'), '0') = '1'
-        UNION
-        SELECT bi.biblionumber, bi.itemtype AS item_type
-        FROM biblioitems bi
-        WHERE COALESCE((SELECT value FROM systempreferences WHERE variable = 'item-level_itypes'), '0') <> '1'
-    ) item_map
-    WHERE item_map.item_type IS NOT NULL AND item_map.item_type <> ''
-)};
-        if ( $definition->{sql} =~ /\A\s*WITH\s+/ ) {
-            $definition->{sql} =~ s/\A\s*WITH\s+/WITH $catalogue_item_types,\n/;
-        }
-        else {
-            $definition->{sql} = "WITH $catalogue_item_types\n" . $definition->{sql};
-        }
+        # Koha::Report::is_sql_valid accepts only statements whose first
+        # non-whitespace token is SELECT. Keep the item-type mapping local to
+        # each predicate rather than prepending a shared CTE.
+        my $item_type_filter = sub {
+            my ($column) = @_;
+            return "(<<Item type|itemtypes>> = '' OR EXISTS (\n"
+                . "        SELECT 1\n"
+                . "        FROM (\n"
+                . "            SELECT DISTINCT item.biblionumber, item.itype AS item_type\n"
+                . "            FROM items item\n"
+                . "            WHERE COALESCE((SELECT value FROM systempreferences WHERE variable = 'item-level_itypes'), '0') = '1'\n"
+                . "            UNION\n"
+                . "            SELECT DISTINCT bi.biblionumber, bi.itemtype AS item_type\n"
+                . "            FROM biblioitems bi\n"
+                . "            WHERE COALESCE((SELECT value FROM systempreferences WHERE variable = 'item-level_itypes'), '0') <> '1'\n"
+                . "        ) catalogue_item_types\n"
+                . "        WHERE catalogue_item_types.biblionumber = $column\n"
+                . "          AND catalogue_item_types.item_type = <<Item type|itemtypes>>\n"
+                . "    ))";
+        };
 
         my %filter_column = (
             requests_awaiting_action => 'req.biblio_id',
@@ -595,9 +595,7 @@ catalogue_item_types AS (
             audit_trail             => 'evt.biblio_id',
         );
         if ( my $column = $filter_column{ $definition->{slug} } ) {
-            my $filter = "\n  AND (<<Item type|itemtypes>> = '' OR EXISTS "
-                . "(SELECT 1 FROM catalogue_item_types cit WHERE cit.biblionumber = $column "
-                . "AND cit.item_type = <<Item type|itemtypes>>))";
+            my $filter = "\n  AND " . $item_type_filter->($column);
             my $marker = $definition->{slug} eq 'staff_activity'
                 ? qr/\nGROUP BY/
                 : qr/\nORDER BY/;
@@ -608,13 +606,24 @@ catalogue_item_types AS (
             my @columns = qw(req.biblio_id loan.biblio_id evt.biblio_id);
             $definition->{sql} =~ s{
 (\QAND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)\E)
-}{$1 . "\n      AND (<<Item type|itemtypes>> = '' OR EXISTS (SELECT 1 FROM catalogue_item_types cit WHERE cit.biblionumber = " . shift(@columns) . " AND cit.item_type = <<Item type|itemtypes>>))"}gex;
+}{$1 . "\n      AND " . $item_type_filter->(shift(@columns))}gex;
         }
         elsif ( $definition->{slug} eq 'department_usage' ) {
             my @columns = qw(req.biblio_id loan.biblio_id evt.biblio_id);
             $definition->{sql} =~ s{
 (\QAND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)\E)
-}{$1 . "\n      AND (<<Item type|itemtypes>> = '' OR EXISTS (SELECT 1 FROM catalogue_item_types cit WHERE cit.biblionumber = " . shift(@columns) . " AND cit.item_type = <<Item type|itemtypes>>))"}gex;
+}{$1 . "\n      AND " . $item_type_filter->(shift(@columns))}gex;
+        }
+
+        # MariaDB accepts a CTE inside a derived SELECT. This preserves the
+        # independent aggregate calculations in the three aggregate reports
+        # while ensuring the stored statement itself starts with SELECT.
+        if ( $definition->{sql} =~ /\A\s*WITH\s+/ ) {
+            my $columns = join ",\n    ", map {
+                "managed_report_result.$_ AS $_"
+            } @{ $definition->{expected_columns} };
+            $definition->{sql} = "SELECT\n    $columns\nFROM (\n"
+                . $definition->{sql} . "\n) AS managed_report_result";
         }
 
         $definition->{definition_version} = DEFINITION_VERSION;

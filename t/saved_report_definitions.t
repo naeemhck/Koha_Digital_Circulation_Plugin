@@ -20,14 +20,18 @@ for my $report (@$reports) {
     unlike $report->{sql}, qr/(?:borrowers\.(?:surname|firstname|email|phone)|payload_json\s+AS)/i,
         "$report->{slug} avoids direct patron identity and raw payload output";
     like $report->{sql}, qr/<<Item type\|itemtypes>>/, "$report->{slug} has native item-type parameter";
-    like $report->{sql}, qr/EXISTS\s*\(\s*SELECT 1 FROM catalogue_item_types/i,
+    like $report->{sql}, qr/\ASELECT\b/,
+        "$report->{slug} begins with Koha-compatible SELECT";
+    unlike $report->{sql}, qr/\A\s*(?:WITH|\/\*|--|\(|\x{FEFF})/i,
+        "$report->{slug} has no invalid prefix before SELECT";
+    like $report->{sql}, qr/EXISTS\s*\(\s*SELECT 1\s+FROM\s*\(/is,
         "$report->{slug} filters without multiplying lifecycle rows";
 }
 
 like $catalog->by_slug->{department_usage}{sql}, qr/pat\.categorycode/, 'department source is borrower category';
 like $catalog->by_slug->{audit_trail}{sql}, qr/JSON_EXTRACT/, 'audit details use an allowlisted projection';
 for my $report (@$reports) {
-    like $report->{sql}, qr/SELECT DISTINCT item_map\.biblionumber, item_map\.item_type/,
+    like $report->{sql}, qr/SELECT DISTINCT item\.biblionumber, item\.itype AS item_type/,
         "$report->{slug} de-duplicates multiple item records";
     like $report->{sql}, qr/FROM items item.*item-level_itypes.*FROM biblioitems bi/s,
         "$report->{slug} supports item-level and record-level Koha modes";
