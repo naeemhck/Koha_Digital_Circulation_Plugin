@@ -1,4 +1,4 @@
-package Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportDefinitions;
+﻿package Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportDefinitions;
 
 use Modern::Perl;
 use Digest::SHA qw(sha256_hex);
@@ -86,24 +86,24 @@ WITH request_base AS (
     JOIN borrowers pat ON pat.borrowernumber = req.patron_id
     WHERE req.requested_at >= <<Start date|date>>
       AND req.requested_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
 ), loan_base AS (
     SELECT loan.loan_id, loan.status
     FROM $l loan
     JOIN borrowers pat ON pat.borrowernumber = loan.patron_id
     WHERE loan.started_at >= <<Start date|date>>
       AND loan.started_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
 ), event_base AS (
     SELECT evt.event_id, evt.event_type
     FROM $e evt
     JOIN borrowers pat ON pat.borrowernumber = evt.patron_id
     WHERE evt.occurred_at >= <<Start date|date>>
       AND evt.occurred_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
 )
 SELECT
     (SELECT COUNT(*) FROM request_base) AS requests_received,
@@ -154,8 +154,8 @@ WHERE req.requested_at >= <<Start date|date>>
   AND req.requested_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
   AND (req.status = 'PENDING' OR (req.status = 'APPROVED' AND loan.loan_id IS NULL))
   AND (<<Request status>> = '' OR (<<Request status>> IN ('PENDING','APPROVED') AND req.status = <<Request status>>))
-  AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-  AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+  AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+  AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
 ORDER BY req.requested_at, req.request_id
 },
         },
@@ -199,8 +199,8 @@ LEFT JOIN $l loan ON loan.request_id = req.request_id
 WHERE req.requested_at >= <<Start date|date>>
   AND req.requested_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
   AND (<<Request status>> = '' OR (<<Request status>> IN ('PENDING','APPROVED','REJECTED','CANCELLED') AND req.status = <<Request status>>))
-  AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-  AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+  AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+  AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
   AND (<<Title contains>> = '' OR bib.title LIKE CONCAT('%', LEFT(<<Title contains>>, 100), '%'))
 ORDER BY req.requested_at DESC, req.request_id DESC
 },
@@ -233,8 +233,8 @@ JOIN borrowers pat ON pat.borrowernumber = loan.patron_id
 LEFT JOIN categories cat ON cat.categorycode = pat.categorycode
 LEFT JOIN biblio bib ON bib.biblionumber = loan.biblio_id
 WHERE loan.status = 'ACTIVE'
-  AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-  AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+  AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+  AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
 ORDER BY loan.due_at, loan.loan_id
 },
         },
@@ -288,8 +288,8 @@ WHERE loan.status IN ('RETURNED','REVOKED','EXPIRED')
         WHEN loan.status = 'EXPIRED' THEN loan.expired_at
       END < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
   AND (<<Terminal status>> = '' OR (<<Terminal status>> IN ('RETURNED','REVOKED','EXPIRED') AND loan.status = <<Terminal status>>))
-  AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-  AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+  AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+  AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
   AND (<<Title contains>> = '' OR bib.title LIKE CONCAT('%', LEFT(<<Title contains>>, 100), '%'))
 ORDER BY terminal_timestamp DESC, loan.loan_id DESC
 },
@@ -325,8 +325,8 @@ LEFT JOIN biblio bib ON bib.biblionumber = evt.biblio_id
 WHERE evt.event_type = 'LOAN_RENEWED'
   AND evt.occurred_at >= <<Start date|date>>
   AND evt.occurred_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-  AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-  AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+  AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+  AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
 ORDER BY evt.occurred_at DESC, evt.event_id DESC
 },
         },
@@ -347,8 +347,8 @@ WITH request_usage AS (
     JOIN borrowers pat ON pat.borrowernumber = req.patron_id
     WHERE req.requested_at >= <<Start date|date>>
       AND req.requested_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
     GROUP BY req.biblio_id
 ), loan_usage AS (
     SELECT loan.biblio_id, COUNT(*) AS issued_loans,
@@ -359,8 +359,8 @@ WITH request_usage AS (
     JOIN borrowers pat ON pat.borrowernumber = loan.patron_id
     WHERE loan.started_at >= <<Start date|date>>
       AND loan.started_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
     GROUP BY loan.biblio_id
 ), renewal_usage AS (
     SELECT evt.biblio_id, COUNT(*) AS renewals
@@ -369,8 +369,8 @@ WITH request_usage AS (
     WHERE evt.event_type = 'LOAN_RENEWED'
       AND evt.occurred_at >= <<Start date|date>>
       AND evt.occurred_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
     GROUP BY evt.biblio_id
 ), usage_keys AS (
     SELECT biblio_id FROM request_usage
@@ -418,8 +418,8 @@ WITH request_usage AS (
     JOIN borrowers pat ON pat.borrowernumber = req.patron_id
     WHERE req.requested_at >= <<Start date|date>>
       AND req.requested_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
     GROUP BY COALESCE(NULLIF(pat.categorycode, ''), '__UNKNOWN__')
 ), loan_usage AS (
     SELECT COALESCE(NULLIF(pat.categorycode, ''), '__UNKNOWN__') AS department_code,
@@ -434,8 +434,8 @@ WITH request_usage AS (
     JOIN borrowers pat ON pat.borrowernumber = loan.patron_id
     WHERE loan.started_at >= <<Start date|date>>
       AND loan.started_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
     GROUP BY COALESCE(NULLIF(pat.categorycode, ''), '__UNKNOWN__')
 ), renewal_usage AS (
     SELECT COALESCE(NULLIF(pat.categorycode, ''), '__UNKNOWN__') AS department_code,
@@ -445,8 +445,8 @@ WITH request_usage AS (
     WHERE evt.event_type = 'LOAN_RENEWED'
       AND evt.occurred_at >= <<Start date|date>>
       AND evt.occurred_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-      AND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)
-      AND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)
+      AND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)
+      AND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)
     GROUP BY COALESCE(NULLIF(pat.categorycode, ''), '__UNKNOWN__')
 ), usage_keys AS (
     SELECT department_code FROM request_usage
@@ -506,7 +506,7 @@ LEFT JOIN borrowers actor
  AND evt.source = 'STAFF'
 WHERE evt.occurred_at >= <<Start date|date>>
   AND evt.occurred_at < DATE_ADD(<<End date|date>>, INTERVAL 1 DAY)
-  AND (<<Branch|branches:all>> = '' OR (evt.source = 'STAFF' AND actor.branchcode = <<Branch|branches:all>>))
+  AND (<<Branch|branches:all>> IN ('','%') OR (evt.source = 'STAFF' AND actor.branchcode = <<Branch|branches:all>>))
 GROUP BY DATE(evt.occurred_at), actor_category, staff_actor_id, staff_branch, evt.event_type
 ORDER BY activity_date DESC, actor_category, staff_actor_id, action_type
 },
@@ -610,13 +610,13 @@ ORDER BY evt.occurred_at DESC, evt.event_id DESC
         if ( $definition->{slug} eq 'lifecycle_summary' ) {
             my @columns = qw(req.biblio_id loan.biblio_id evt.biblio_id);
             $definition->{sql} =~ s{
-(\QAND (<<Department|categorycode:all>> = '' OR pat.categorycode = <<Department|categorycode:all>>)\E)
+(\QAND (<<Department|categorycode:all>> IN ('','%') OR pat.categorycode = <<Department|categorycode:all>>)\E)
 }{$1 . "\n      AND " . $item_type_filter->(shift(@columns))}gex;
         }
         elsif ( $definition->{slug} eq 'department_usage' ) {
             my @columns = qw(req.biblio_id loan.biblio_id evt.biblio_id);
             $definition->{sql} =~ s{
-(\QAND (<<Branch|branches:all>> = '' OR pat.branchcode = <<Branch|branches:all>>)\E)
+(\QAND (<<Branch|branches:all>> IN ('','%') OR pat.branchcode = <<Branch|branches:all>>)\E)
 }{$1 . "\n      AND " . $item_type_filter->(shift(@columns))}gex;
         }
 

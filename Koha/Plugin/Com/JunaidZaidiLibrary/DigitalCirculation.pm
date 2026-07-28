@@ -17,7 +17,7 @@ use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::Saved
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportDefinitions;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportProvisioning;
 
-our $VERSION             = '0.4.2';
+our $VERSION             = '0.4.3';
 our $SCHEMA_VERSION      = 1;
 our $TESTED_KOHA_VERSION = '26.05.01.000';
 
