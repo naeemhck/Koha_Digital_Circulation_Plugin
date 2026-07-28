@@ -30,7 +30,7 @@ function Read-ArchiveText($Archive, [string]$Name) {
     finally { $reader.Dispose() }
 }
 
-Assert-Contract ($source.Contains("our `$VERSION             = '0.3.1';")) 'plugin version is 0.3.1'
+Assert-Contract ($source.Contains("our `$VERSION             = '0.4.0';")) 'plugin version is 0.4.0'
 Assert-Contract ($source.Contains('our $SCHEMA_VERSION      = 1;')) 'schema version remains 1'
 Assert-Contract ($source.Contains("minimum_version => '26.05.00.000'")) 'minimum Koha version remains 26.05.00.000'
 
@@ -286,7 +286,7 @@ if ($Kpz) {
     Assert-Contract ($names -contains "$bundle/tool.tt") 'archive contains tool.tt at bundle root'
     Assert-Contract ($names -contains "$bundle/configure.tt") 'archive contains configure.tt at bundle root'
     Assert-Contract (-not ($names | Where-Object { $_ -like 'Koha_Digital_Circulation_Plugin/*' })) 'archive has no extra repository directory'
-    Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.3.1';")) 'packaged internal plugin version is 0.3.1'
+    Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.4.0';")) 'packaged internal plugin version is 0.4.0'
     Assert-Contract ($packagedMain.Contains('sub _stamp_schema_state') -and $packagedMain.Contains('ON DUPLICATE KEY UPDATE') -and ($packagedMain -match 'plugin_version\s*=\s*VALUES\(plugin_version\)') -and -not $packagedMain.Contains('INSERT IGNORE INTO `$v`')) 'packaged upgrade path explicitly refreshes the plugin-version stamp'
     Assert-Contract ($packagedMain.Contains('Schema state must contain exactly one canonical row') -and $packagedMain.Contains('Schema version 1 was not recorded')) 'packaged upgrade path retains strict schema-state verification'
     Assert-Contract ($packagedMain.Contains("return 'jzl-digital-circulation';")) 'packaged API namespace is unchanged'
@@ -324,10 +324,17 @@ if ($Kpz) {
     }
     Assert-Contract ($names -contains "$bundle/Service/StaffLoanIssuanceApplication.pm" -and $names -contains "$bundle/Service/ConfiguredLoanPeriodPolicy.pm" -and $names -contains "$bundle/Service/LoanIssuanceService.pm") 'packaged archive includes Phase 2C issuance runtime modules'
     Assert-Contract ($names -contains "$bundle/Service/LoanReturnService.pm" -and $names -contains "$bundle/Service/PortalLoanReturnApplication.pm" -and $names -contains "$bundle/Controller/Loans.pm") 'packaged archive includes Phase 4B return runtime modules'
+    Assert-Contract ($names -contains "$bundle/Service/SavedReportDefinitions.pm" -and $names -contains "$bundle/Service/SavedReportProvisioning.pm" -and $names -contains "$bundle/Repository/SavedReportRepository.pm") 'packaged archive includes Phase 6 Saved Reports runtime modules'
+    $packagedReportDefinitions = Read-ArchiveText $archive "$bundle/Service/SavedReportDefinitions.pm"
+    Assert-Contract (([regex]::Matches($packagedReportDefinitions, 'slug =>')).Count -eq 10 -and $packagedReportDefinitions.Contains('<<Item type|itemtypes>>')) 'packaged archive has ten Item Type-filtered managed reports'
     Assert-Contract ($packagedConfigure.Contains('name="csrf_token"')) 'packaged configuration includes CSRF token field'
     Assert-Contract (-not ($packagedConfigure -match 'name="[^"]*(?:client_secret|bearer|password|database|dsn)[^"]*"')) 'packaged configuration requests no credentials'
     Assert-Contract (-not ($productionText -match '(?<![A-Za-z0-9_])[A-Za-z]:\\[^\\\r\n]{2,}\\|/var/lib/koha/library|Authorization:\s*Bearer\s+[A-Za-z0-9._~+/-]{12,}|(?:client_secret|password)\s*(?:=>|=)\s*[''"][^''"]+[''"]')) 'packaged production files contain no paths or literal credentials'
     $sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $resolvedKpz).Hash.ToLowerInvariant()
     Write-Output "SHA-256: $sha256"
 }
+$reportDefinitions = Get-Content -Raw -LiteralPath (Join-Path $root 'Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/SavedReportDefinitions.pm')
+Assert-Contract (([regex]::Matches($reportDefinitions, 'slug =>')).Count -eq 10) 'Phase 6 defines exactly ten managed reports'
+Assert-Contract ($reportDefinitions.Contains('<<Item type|itemtypes>>') -and $reportDefinitions.Contains('item-level_itypes') -and $reportDefinitions.Contains('SELECT DISTINCT item_map.biblionumber, item_map.item_type')) 'Phase 6 uses native item-type selection with de-duplicated dual-mode mapping'
+Assert-Contract (-not ($reportDefinitions -match '(?i)(?:FROM|JOIN)\s+issues\b')) 'Phase 6 never treats native issues as digital lifecycle data'
 Write-Output 'Source/package validation passed'

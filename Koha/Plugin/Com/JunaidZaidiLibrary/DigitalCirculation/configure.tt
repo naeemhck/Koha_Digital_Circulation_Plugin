@@ -100,5 +100,34 @@
     </fieldset>
     <button class="btn btn-primary" type="submit">Save configuration</button>
   </form>
+
+  <fieldset class="rows">
+    <legend>Koha Saved Reports</legend>
+    <ol>
+      <li>
+        <span class="label">Managed definitions</span>
+        <span>[% reporting_status.installed_count | html %] of [% reporting_status.expected_count | html %] current</span>
+        [% IF reporting_status.missing.size %]<span class="hint">Missing: [% reporting_status.missing.join(', ') | html %]</span>[% END %]
+        [% IF reporting_status.drifted.size %]<span class="hint">Changed locally: [% reporting_status.drifted.join(', ') | html %]</span>[% END %]
+        [% IF reporting_status.duplicates.size || reporting_status.conflicts.size %]
+          <span class="hint">Repair is blocked by a naming or ownership conflict. Existing reports are not overwritten.</span>
+        [% END %]
+      </li>
+      <li>
+        <span class="label">Open reports</span>
+        <a class="btn btn-default" href="[% reporting_url | html %]">Digital Circulation saved reports</a>
+      </li>
+    </ol>
+  </fieldset>
+  [% IF report_repair_allowed %]
+    <form method="post" onsubmit="return confirm('Restore only Digital Circulation managed report definitions to their shipped versions? Duplicate a report first to preserve local customizations.');">
+      <input type="hidden" name="class" value="[% CLASS | html %]">
+      <input type="hidden" name="method" value="configure">
+      <input type="hidden" name="op" value="cud-repair-managed-reports">
+      <input type="hidden" name="csrf_token" value="[% csrf_token | html %]">
+      <input type="hidden" name="confirm_repair" value="1">
+      <button class="btn btn-default" type="submit">Repair managed report definitions</button>
+    </form>
+  [% END %]
 </div>
 [% INCLUDE 'intranet-bottom.inc' %]

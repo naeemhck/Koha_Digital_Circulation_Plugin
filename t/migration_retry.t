@@ -64,12 +64,15 @@ my $retry_dbh = Local::MigrationDBH->new;
 {
     no warnings 'redefine';
     local *C4::Context::dbh = sub { return $retry_dbh };
+    local *Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::_saved_report_provisioning = sub {
+        return bless {}, 'Local::MigrationReportProvisioning';
+    };
     ok $plugin->install, 'retry succeeds with first three tables already present';
 }
 ok $retry_dbh->{tables}{plugin_jzl_ebook_events}, 'retry creates events table';
 ok $retry_dbh->{tables}{plugin_jzl_ebook_schema_versions}, 'retry creates schema-version table';
 is_deeply $retry_dbh->{schema_rows},
-    [ { schema_version => 1, plugin_version => '0.3.1' } ],
+    [ { schema_version => 1, plugin_version => '0.4.0' } ],
     'retry records canonical schema 1 and current plugin version';
 ok $retry_dbh->{released}, 'retry releases migration lock';
 ok !grep( /DROP TABLE/i, @{ $retry_dbh->{calls} } ), 'retry is non-destructive';
@@ -79,9 +82,17 @@ my $warning = '';
 {
     no warnings 'redefine';
     local *C4::Context::dbh = sub { return $missing_dbh };
+    local *Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::_saved_report_provisioning = sub {
+        return bless {}, 'Local::MigrationReportProvisioning';
+    };
     local $SIG{__WARN__} = sub { $warning .= join '', @_ };
     ok !$plugin->install, 'install cannot succeed with events table missing';
 }
 like $warning, qr/PLUGIN_SCHEMA_UNAVAILABLE: migration failed: Expected table plugin_jzl_ebook_events is missing/, 'safe error identifies missing table';
 ok $missing_dbh->{released}, 'failure path releases migration lock';
+{
+    package Local::MigrationReportProvisioning;
+    sub provision { return { ok => 1, changed => 0 } }
+}
+package main;
 done_testing;

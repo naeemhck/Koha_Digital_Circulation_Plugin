@@ -13,8 +13,11 @@ use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::Configur
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LoanIssuanceService;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LifecyclePolicy;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalServiceAuthorization;
+use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::SavedReportRepository;
+use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportDefinitions;
+use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportProvisioning;
 
-our $VERSION             = '0.3.1';
+our $VERSION             = '0.4.0';
 our $SCHEMA_VERSION      = 1;
 our $TESTED_KOHA_VERSION = '26.05.01.000';
 
@@ -365,6 +368,18 @@ sub install {
         return 0;
     }
 
+    my $report_result = eval {
+        $self->_saved_report_provisioning->provision(
+            borrowernumber => $self->_current_staff_borrowernumber,
+        );
+    };
+    if ( !$report_result || !$report_result->{ok} ) {
+        my $code = ref $report_result ? ( $report_result->{code} // 'UNKNOWN' ) : ( $@ || 'UNKNOWN' );
+        warn 'PLUGIN_SAVED_REPORTS_UNAVAILABLE: '
+            . $self->_safe_install_error($code);
+        return 0;
+    }
+
     return 1;
 }
 
@@ -402,8 +417,29 @@ sub configure {
         if ( !$csrf_valid ) {
             $error = 'The form expired or failed CSRF validation.';
         }
-        elsif ( ( scalar $cgi->param('op') // '' ) ne 'cud-save-configuration' )
-        {
+        elsif ( ( scalar $cgi->param('op') // '' ) eq 'cud-repair-managed-reports' ) {
+            if ( !$self->_report_repair_allowed ) {
+                $error = 'You do not have permission to repair managed reports.';
+            }
+            elsif ( ( scalar $cgi->param('confirm_repair') // '' ) ne '1' ) {
+                $error = 'Managed report repair was not confirmed.';
+            }
+            else {
+                my $result = $self->_saved_report_provisioning->provision(
+                    repair         => 1,
+                    borrowernumber => $self->_current_staff_borrowernumber,
+                );
+                if ( $result->{ok} ) {
+                    $message = 'Managed Koha Saved Reports verified; '
+                        . ( $result->{changed} || 0 ) . ' definition(s) repaired.';
+                }
+                else {
+                    $error = 'Managed report repair was stopped safely: '
+                        . ( $result->{code} // 'unknown error' ) . '.';
+                }
+            }
+        }
+        elsif ( ( scalar $cgi->param('op') // '' ) ne 'cud-save-configuration' ) {
             $error = 'The requested configuration action is invalid.';
         }
         else {
@@ -517,12 +553,19 @@ sub configure {
     }
 
     my $template = $self->get_template( { file => 'configure.tt' } );
+    my $report_status = eval { $self->_saved_report_provisioning->inspect } || {
+        expected_count => 10, installed_count => 0, missing => [], drifted => [],
+        duplicates => [], conflicts => ['STATUS_UNAVAILABLE'],
+    };
     $template->param(
         csrf_token                 => $csrf_token,
         message                    => $message,
         error                      => $error,
         portal_service_account_ids => $allowlist_value,
         default_loan_duration_days => $duration_value,
+        reporting_url              => Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportDefinitions->saved_reports_url,
+        reporting_status           => $report_status,
+        report_repair_allowed      => $self->_report_repair_allowed,
         %{$lifecycle_settings},
     );
     return $self->output_html( $template->output );
@@ -568,6 +611,34 @@ sub _configuration_lifecycle_policy {
 
 sub _configuration_tokenizer {
     return Koha::Token->new;
+}
+
+sub _saved_report_provisioning {
+    my ($self) = @_;
+    my $definitions = Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportDefinitions->new(
+        requests_table => $self->table('requests'),
+        loans_table    => $self->table('loans'),
+        events_table   => $self->table('events'),
+    );
+    my $repository = Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Repository::SavedReportRepository->new(
+        dbh => C4::Context->dbh,
+    );
+    return Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::SavedReportProvisioning->new(
+        repository => $repository, definitions => $definitions,
+    );
+}
+
+sub _current_staff_borrowernumber {
+    my ($self) = @_;
+    my $userenv = C4::Context->userenv || {};
+    return $userenv->{number} || $userenv->{id};
+}
+
+sub _report_repair_allowed {
+    my ($self) = @_;
+    my $userenv = C4::Context->userenv || {};
+    return 0 unless $userenv->{id};
+    return haspermission( $userenv->{id}, { plugins => 'configure' } ) ? 1 : 0;
 }
 
 sub _staff_allowed {

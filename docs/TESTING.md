@@ -57,3 +57,10 @@ bounded repeated expiry, named/row-lock source contracts, event rollback,
 progress preservation, route/event inventory, database UTC, and native
 circulation isolation. `t/lifecycle_contract.t` is part of the complete Perl
 gate; a simulation pass is not a claim that Perl tests passed.
+# Phase 6 Saved Reports
+
+Run `prove -v t/saved_report_definitions.t t/saved_report_provisioning.t` in
+the Koha environment. Before release, run
+`KOHA_CONF=/etc/koha/sites/<instance>/koha-conf.xml PERL5LIB=/usr/share/koha/lib:. perl scripts/explain_saved_reports.pl`.
+This performs read-only `EXPLAIN` validation of all ten definitions and does
+not create Saved Reports or alter circulation data.

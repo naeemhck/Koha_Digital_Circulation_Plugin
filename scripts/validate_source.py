@@ -22,7 +22,7 @@ EXPECTED_TABLES = [
     "events",
     "schema_versions",
 ]
-PLUGIN_VERSION = "0.3.1"
+PLUGIN_VERSION = "0.4.0"
 
 # Detect real Windows absolute paths, UNC shares, Koha instance paths, usable
 # bearer samples, and literal credentials. The drive-letter branch requires a
@@ -115,7 +115,7 @@ def check_source() -> None:
         if line.strip()
     ]
     openapi = json.loads((ROOT / BUNDLE / "openapi.json").read_text(encoding="utf-8"))
-    require(f"our $VERSION             = '{PLUGIN_VERSION}';" in source, "plugin version is 0.3.1")
+    require(f"our $VERSION             = '{PLUGIN_VERSION}';" in source, "plugin version is 0.4.0")
     require("our $SCHEMA_VERSION      = 1;" in source, "schema version remains 1")
     require("minimum_version => '26.05.00.000'" in source, "minimum Koha version remains 26.05.00.000")
 
@@ -984,6 +984,22 @@ def check_source() -> None:
         not in source,
         "broken extension-bearing JavaScript URL is absent",
     )
+    report_definitions = (ROOT / BUNDLE / "Service/SavedReportDefinitions.pm").read_text(encoding="utf-8")
+    require(
+        report_definitions.count("slug =>") == 10,
+        "Phase 6 defines exactly ten managed reports",
+    )
+    require(
+        "<<Item type|itemtypes>>" in report_definitions
+        and "item-level_itypes" in report_definitions
+        and "SELECT DISTINCT item_map.biblionumber, item_map.item_type" in report_definitions,
+        "Phase 6 uses native item-type selection with de-duplicated dual-mode mapping",
+    )
+    require(
+        "FROM issues" not in report_definitions
+        and "JOIN issues" not in report_definitions,
+        "Phase 6 never treats native issues as digital lifecycle data",
+    )
     require(len(manifest) == len(set(manifest)), "MANIFEST has no duplicate paths")
     for name in manifest:
         require(not pathlib.PurePosixPath(name).is_absolute(), f"manifest path is relative: {name}")
@@ -1031,7 +1047,7 @@ def check_archive(path: pathlib.Path) -> None:
         packaged_main = archive.read(f"{BUNDLE_MANIFEST}.pm").decode("utf-8")
         require(
             f"our $VERSION             = '{PLUGIN_VERSION}';" in packaged_main,
-            "packaged internal plugin version is 0.3.1",
+            "packaged internal plugin version is 0.4.0",
         )
         require(
             "sub _stamp_schema_state" in packaged_main
@@ -1189,7 +1205,19 @@ def check_archive(path: pathlib.Path) -> None:
             and f"{BUNDLE_MANIFEST}/Controller/Loans.pm" in names,
             "packaged archive includes Phase 4B return runtime modules",
         )
+        require(
+            f"{BUNDLE_MANIFEST}/Service/SavedReportDefinitions.pm" in names
+            and f"{BUNDLE_MANIFEST}/Service/SavedReportProvisioning.pm" in names
+            and f"{BUNDLE_MANIFEST}/Repository/SavedReportRepository.pm" in names,
+            "packaged archive includes Phase 6 Saved Reports runtime modules",
+        )
         configure = archive.read(f"{BUNDLE_MANIFEST}/configure.tt").decode("utf-8")
+        definitions = archive.read(f"{BUNDLE_MANIFEST}/Service/SavedReportDefinitions.pm").decode("utf-8")
+        require(
+            definitions.count("slug =>") == 10
+            and "<<Item type|itemtypes>>" in definitions,
+            "packaged archive has ten Item Type-filtered managed reports",
+        )
         require('name="csrf_token"' in configure, "packaged configuration includes CSRF token field")
         require(
             re.search(

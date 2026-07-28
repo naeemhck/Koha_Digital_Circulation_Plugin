@@ -13,7 +13,7 @@ docs remain under `docs/`.
 | Checkpoint base commit | `e19a669` (Phase 2C–3A source) |
 | Plugin Perl package | `Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation` |
 | API namespace | `jzl-digital-circulation` |
-| Plugin version | `0.3.1` |
+| Plugin version | `0.4.0` |
 | Minimum Koha version | `26.05.00.000` |
 | Tested Koha version | `26.05.01.000` |
 | Schema version | `1` |
@@ -320,3 +320,8 @@ retaining version 0.3.1/schema 1. Start with
 `PHASE5_AUTHORITATIVE_LOAN_LIFECYCLE.md`. Do not enable, package, install,
 commit, or merge it without a separately authorized checkpoint and the full
 Koha-host Perl gate.
+Phase 6 reporting release is on
+`feature/phase6-koha-saved-reports`. It adds ten managed native Saved Reports;
+see `docs/REPORTING.md`. It is version 0.4.0/schema 1, does not create an
+item type, and requires the separately documented checkpoint/package workflow
+before deployment.

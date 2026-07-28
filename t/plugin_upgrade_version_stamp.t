@@ -56,22 +56,31 @@ sub run_with_dbh {
     {
         no warnings 'redefine';
         local *C4::Context::dbh = sub { return $dbh };
+        local *Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::_saved_report_provisioning = sub {
+            return bless {}, 'Local::SuccessfulReportProvisioning';
+        };
         $result = $plugin->$method;
     }
     return $result;
 }
 
-subtest 'fresh install writes one canonical 0.3.1 schema-1 state' => sub {
+{
+    package Local::SuccessfulReportProvisioning;
+    sub provision { return { ok => 1, changed => 0 } }
+}
+package main;
+
+subtest 'fresh install writes one canonical 0.4.0 schema-1 state' => sub {
     my $dbh = Local::PluginUpgradeDBH->new;
     ok run_with_dbh( 'install', $dbh ), 'fresh install succeeds';
     is scalar @{ $dbh->{schema_rows} }, 1, 'one canonical state row exists';
-    is_deeply $dbh->{schema_rows}[0], expected_state('0.3.1'),
+    is_deeply $dbh->{schema_rows}[0], expected_state('0.4.0'),
         'fresh state records schema 1 and current plugin version';
     is_deeply [ grep { /^(?:begin|commit|rollback)$/ } @{ $dbh->{calls} } ],
         [qw(begin commit)], 'state write and verification commit';
 };
 
-subtest '0.3.0 to 0.3.1 upgrade preserves business data' => sub {
+subtest '0.3.1 to 0.4.0 upgrade preserves business data' => sub {
     my %business = business_data();
     my $dbh = Local::PluginUpgradeDBH->new(
         existing_tables => 1,
@@ -86,7 +95,7 @@ subtest '0.3.0 to 0.3.1 upgrade preserves business data' => sub {
     );
     ok run_with_dbh( 'upgrade', $dbh ), 'prior-version upgrade succeeds';
     is scalar @{ $dbh->{schema_rows} }, 1, 'upgrade creates no duplicate row';
-    is_deeply $dbh->{schema_rows}[0], expected_state('0.3.1'),
+    is_deeply $dbh->{schema_rows}[0], expected_state('0.4.0'),
         'plugin-version stamp advances while schema remains 1';
     is_deeply(
         { map { $_ => $dbh->{$_} } keys %{$before} },
@@ -95,11 +104,11 @@ subtest '0.3.0 to 0.3.1 upgrade preserves business data' => sub {
     );
 };
 
-subtest '0.3.1 replay is idempotent' => sub {
+subtest '0.4.0 replay is idempotent' => sub {
     my %business = business_data();
     my $dbh = Local::PluginUpgradeDBH->new(
         existing_tables => 1,
-        schema_rows     => [ expected_state('0.3.1') ],
+        schema_rows     => [ expected_state('0.4.0') ],
         %business,
     );
     my $before = dclone(
