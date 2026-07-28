@@ -142,6 +142,104 @@ sub get_by_id {
     );
 }
 
+sub get_for_return {
+    my ( $self, $dbh, $loan_id, %options ) = @_;
+    die 'INVALID_DBH' unless $dbh;
+    die 'INVALID_LOAN_ID'
+        unless defined $loan_id
+        && !ref($loan_id)
+        && $loan_id =~ /\A[1-9][0-9]*\z/;
+
+    my $loans_table    = $self->{table_name};
+    my $requests_table = $self->{request_table_name};
+    my $lock           = $options{for_update} ? ' FOR UPDATE' : '';
+    my $row            = $dbh->selectrow_hashref(
+        qq{
+            SELECT
+                l.loan_id,
+                l.request_id,
+                r.portal_request_id AS portal_request_id,
+                l.patron_id,
+                l.biblio_id,
+                l.status,
+                l.started_at,
+                l.due_at,
+                l.returned_at,
+                l.revoked_at,
+                l.expired_at,
+                l.approved_by,
+                l.renewal_count,
+                l.row_version,
+                l.created_at,
+                l.updated_at,
+                r.request_id AS joined_request_id,
+                r.patron_id AS request_patron_id,
+                r.biblio_id AS request_biblio_id
+              FROM `$loans_table` l
+              INNER JOIN `$requests_table` r
+                ON r.request_id = l.request_id
+             WHERE l.loan_id = ?
+             $lock
+        },
+        undef,
+        0 + $loan_id
+    );
+    return unless $row;
+    return {
+        map { $_ => $row->{$_} }
+          (
+            @LOAN_FIELDS,
+            qw(
+              portal_request_id
+              joined_request_id
+              request_patron_id
+              request_biblio_id
+            )
+          )
+    };
+}
+
+sub update_active_return {
+    my ( $self, $dbh, %args ) = @_;
+    my $table = $self->{table_name};
+    my $loan_id              = $args{loan_id};
+    my $expected_row_version = $args{expected_row_version};
+    my $returned_at          = $args{returned_at};
+    die 'INVALID_RETURN_UPDATE'
+        unless defined $loan_id
+        && !ref($loan_id)
+        && $loan_id =~ /\A[1-9][0-9]*\z/
+        && defined $expected_row_version
+        && !ref($expected_row_version)
+        && $expected_row_version =~ /\A[1-9][0-9]*\z/
+        && defined $returned_at
+        && !ref($returned_at)
+        && $returned_at =~ /\A\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\z/;
+
+    my $affected = $dbh->do(
+        qq{
+            UPDATE `$table`
+               SET status = 'RETURNED',
+                   returned_at = ?,
+                   row_version = row_version + 1,
+                   updated_at = ?
+             WHERE loan_id = ?
+               AND status = 'ACTIVE'
+               AND row_version = ?
+               AND returned_at IS NULL
+               AND revoked_at IS NULL
+               AND expired_at IS NULL
+        },
+        undef,
+        $returned_at,
+        $returned_at,
+        0 + $loan_id,
+        0 + $expected_row_version
+    );
+    return 0 unless defined $affected && !ref($affected) && $affected == 1;
+    return 1;
+}
+
 sub insert_active_loan {
     my ( $self, $dbh, %args ) = @_;
     my $table = $self->{table_name};

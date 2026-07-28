@@ -15,12 +15,14 @@ Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Repository/RenewalReposito
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Repository/RequestRepository.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/LoanService.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/LoanIssuanceService.pm
+Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/LoanReturnService.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/ConfiguredLoanPeriodPolicy.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/EbookContentAdapter.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/EbookContentEligibility.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/PortalServiceAuthorization.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/PortalRequestApplication.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/PortalLoanReadApplication.pm
+Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/PortalLoanReturnApplication.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/RequestDecisionService.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/RequestService.pm
 Koha/Plugin/Com/JunaidZaidiLibrary/DigitalCirculation/Service/StaffDecisionAuthorization.pm

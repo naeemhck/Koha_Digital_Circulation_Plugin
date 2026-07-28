@@ -80,6 +80,7 @@ auditable.
 | Phase 2B staff decisions | Complete (`POST /requests/{id}/decision` + UI) |
 | Phase 2C loan issuance | Complete (`POST /requests/{id}/issue` + UI + duration policy) |
 | Phase 3A portal patron-loan read | Complete (`GET /patrons/{patron_id}/loans`) |
+| Phase 4B patron return | Implemented (`POST /loans/{loan_id}/return`) — not live-verified; portal flag remains disabled |
 
 ## REST routes
 
@@ -93,6 +94,7 @@ Base prefix:
 | `POST` | `/requests/{request_id}/decision` | Staff circulate permission | Approve/reject PENDING requests |
 | `POST` | `/requests/{request_id}/issue` | Staff circulate permission | Issues ACTIVE loan from APPROVED request |
 | `GET` | `/patrons/{patron_id}/loans` | Allowlisted portal service **only** | Read-only; staff actor 51 denied |
+| `POST` | `/loans/{loan_id}/return` | Allowlisted portal service **only** | ACTIVE→RETURNED; idempotent already-RETURNED; no native Koha issue mutation |
 
 Also present for ops/staff reads: `/health`, `/version`, and staff list routes
 defined in `openapi.json`.
@@ -108,7 +110,8 @@ Shared contract rules:
 Detailed contracts: `docs/PORTAL_REQUEST_HTTP_API.md`,
 `docs/STAFF_REQUEST_DECISION_HTTP_API.md`,
 `docs/PHASE2C_STAFF_LOAN_ISSUANCE_HTTP_API.md`,
-`docs/PHASE3A_PORTAL_LOAN_READ_API.md`.
+`docs/PHASE3A_PORTAL_LOAN_READ_API.md`,
+`docs/PHASE4B_PATRON_LOAN_RETURN.md`.
 
 ## Current validation
 
@@ -247,8 +250,6 @@ sudo koha-shell -c "cd /path/to/repository && prove -I. -v t" library
 ## Remaining work
 
 - Portal local live synchronization verification (portal repo)
-- Protected-reader entitlement
-- Return workflow
 - Renewal workflow
 - Revocation workflow
 - Expiry processing
@@ -256,19 +257,18 @@ sudo koha-shell -c "cd /path/to/repository && prove -I. -v t" library
 
 ## Exact next step
 
-The portal database currently lacks a local `EbookAccessRequest` shadow for the
-historical live loan correlation UUID. Do **not** insert that row with SQL.
+Phase 4A reader entitlement is complete on the portal side. Phase 4B return is
+implemented in source (plugin + portal) behind
+`DIGITAL_CIRCULATION_PLUGIN_RETURNS_ENABLED=false` and is **not** live-verified.
 
-Instead:
+Next controlled step (separate unit):
 
-1. In the portal repository branch
-   `feature/koha-backed-request-orchestration`, use the supported request
-   workflow to create a **fresh** protected-eBook request for the controlled
-   test patron/biblio.
-2. In Koha staff Digital Circulation UI, approve and **Issue Loan**.
-3. Enable portal loan sync (`DIGITAL_CIRCULATION_PLUGIN_LOANS_ENABLED`) only in
-   the controlled portal environment and verify My Loans against the new loan.
-4. Keep KOHA_PLUGIN shadows unreadable until a later entitlement phase.
+1. Deploy/install only after an explicit checkpoint.
+2. Enable the returns flag only in a controlled environment.
+3. Perform a deploy-controlled live return verification on an authorized
+   non-reserved loan (do not mutate reserved historical records without
+   authorization).
+4. Keep renewal/revocation/expiry out of scope.
 
 ## Repository relationship
 

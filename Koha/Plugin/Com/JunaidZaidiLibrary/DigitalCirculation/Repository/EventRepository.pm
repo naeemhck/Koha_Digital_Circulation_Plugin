@@ -37,6 +37,12 @@ sub insert_loan_created_event {
     return $self->_insert_request_event( $dbh, %args );
 }
 
+sub insert_loan_returned_event {
+    my ( $self, $dbh, %args ) = @_;
+    $args{event_type} = 'LOAN_RETURNED';
+    return $self->_insert_request_event( $dbh, %args );
+}
+
 sub _insert_request_event {
     my ( $self, $dbh, %args ) = @_;
     my $table = $self->{table_name};

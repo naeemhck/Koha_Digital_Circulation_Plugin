@@ -166,12 +166,15 @@ def check_source() -> None:
         f"{BUNDLE_MANIFEST}/Service/PortalServiceAuthorization.pm",
         f"{BUNDLE_MANIFEST}/Service/PortalRequestApplication.pm",
         f"{BUNDLE_MANIFEST}/Service/PortalLoanReadApplication.pm",
+        f"{BUNDLE_MANIFEST}/Service/PortalLoanReturnApplication.pm",
         f"{BUNDLE_MANIFEST}/Controller/Patrons.pm",
+        f"{BUNDLE_MANIFEST}/Controller/Loans.pm",
         f"{BUNDLE_MANIFEST}/Repository/RequestRepository.pm",
         f"{BUNDLE_MANIFEST}/Repository/EventRepository.pm",
         f"{BUNDLE_MANIFEST}/Service/RequestDecisionService.pm",
         f"{BUNDLE_MANIFEST}/Service/RequestService.pm",
         f"{BUNDLE_MANIFEST}/Service/LoanIssuanceService.pm",
+        f"{BUNDLE_MANIFEST}/Service/LoanReturnService.pm",
         f"{BUNDLE_MANIFEST}/Service/ConfiguredLoanPeriodPolicy.pm",
         f"{BUNDLE_MANIFEST}/Service/StaffDecisionAuthorization.pm",
         f"{BUNDLE_MANIFEST}/Service/StaffRequestDecisionApplication.pm",
@@ -628,11 +631,20 @@ def check_source() -> None:
     require(
         write_routes
         == [
+            "post /loans/{loan_id}/return",
             "post /requests",
             "post /requests/{request_id}/decision",
             "post /requests/{request_id}/issue",
         ],
-        "source OpenAPI has exactly three POST routes including staff issuance",
+        "source OpenAPI has exactly four POST routes including patron return",
+    )
+    return_post = openapi.get("/loans/{loan_id}/return", {}).get("post")
+    require(
+        isinstance(return_post, dict)
+        and return_post.get("operationId") == "jzlReturnDigitalLoan"
+        and return_post.get("x-mojo-to")
+        == "Com::JunaidZaidiLibrary::DigitalCirculation::Controller::Loans#return_loan",
+        "patron return OpenAPI route and controller operation agree",
     )
     portal_loan_get = openapi.get("/patrons/{patron_id}/loans", {}).get("get")
     require(
@@ -965,11 +977,17 @@ def check_archive(path: pathlib.Path) -> None:
         require(
             post_routes
             == [
+                "/loans/{loan_id}/return",
                 "/requests",
                 "/requests/{request_id}/decision",
                 "/requests/{request_id}/issue",
             ],
-            "packaged OpenAPI has exactly three POST routes including staff issuance",
+            "packaged OpenAPI has exactly four POST routes including patron return",
+        )
+        require(
+            packaged_openapi["/loans/{loan_id}/return"]["post"].get("operationId")
+            == "jzlReturnDigitalLoan",
+            "packaged return operation ID is correct",
         )
         require(
             packaged_openapi["/requests/{request_id}/issue"]["post"].get("operationId")
@@ -1071,6 +1089,12 @@ def check_archive(path: pathlib.Path) -> None:
             and f"{BUNDLE_MANIFEST}/Service/ConfiguredLoanPeriodPolicy.pm" in names
             and f"{BUNDLE_MANIFEST}/Service/LoanIssuanceService.pm" in names,
             "packaged archive includes Phase 2C issuance runtime modules",
+        )
+        require(
+            f"{BUNDLE_MANIFEST}/Service/LoanReturnService.pm" in names
+            and f"{BUNDLE_MANIFEST}/Service/PortalLoanReturnApplication.pm" in names
+            and f"{BUNDLE_MANIFEST}/Controller/Loans.pm" in names,
+            "packaged archive includes Phase 4B return runtime modules",
         )
         configure = archive.read(f"{BUNDLE_MANIFEST}/configure.tt").decode("utf-8")
         require('name="csrf_token"' in configure, "packaged configuration includes CSRF token field")

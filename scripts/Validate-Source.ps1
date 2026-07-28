@@ -71,7 +71,7 @@ Assert-Contract (Test-Path (Join-Path $root $configurePath)) 'configure.tt exist
 Assert-Contract ($manifest -contains $configurePath) 'configure.tt bundle-root path is in MANIFEST'
 Assert-Contract (-not (Test-Path (Join-Path $root "$bundle/templates/tool.tt"))) 'no duplicate guessed template path'
 Assert-Contract (-not (Test-Path (Join-Path $root "$bundle/templates/configure.tt"))) 'no obsolete configuration template path'
-foreach ($runtime in @("$bundle.pm", "$bundle/openapi.json", "$bundle/Controller/Requests.pm", "$bundle/Controller/Patrons.pm", "$bundle/Service/EbookContentAdapter.pm", "$bundle/Service/EbookContentEligibility.pm", "$bundle/Service/PortalServiceAuthorization.pm", "$bundle/Service/PortalRequestApplication.pm", "$bundle/Service/PortalLoanReadApplication.pm", "$bundle/Repository/RequestRepository.pm", "$bundle/Repository/EventRepository.pm", "$bundle/Repository/LoanRepository.pm", "$bundle/Service/RequestDecisionService.pm", "$bundle/Service/RequestService.pm", "$bundle/Service/LoanIssuanceService.pm", "$bundle/Service/ConfiguredLoanPeriodPolicy.pm", "$bundle/Service/StaffDecisionAuthorization.pm", "$bundle/Service/StaffRequestDecisionApplication.pm", "$bundle/Service/StaffLoanIssuanceApplication.pm", "$bundle/static/css/jzl-digital-circulation.css", "$bundle/static/js/jzl-digital-circulation.js")) {
+foreach ($runtime in @("$bundle.pm", "$bundle/openapi.json", "$bundle/Controller/Requests.pm", "$bundle/Controller/Patrons.pm", "$bundle/Controller/Loans.pm", "$bundle/Service/EbookContentAdapter.pm", "$bundle/Service/EbookContentEligibility.pm", "$bundle/Service/PortalServiceAuthorization.pm", "$bundle/Service/PortalRequestApplication.pm", "$bundle/Service/PortalLoanReadApplication.pm", "$bundle/Service/PortalLoanReturnApplication.pm", "$bundle/Repository/RequestRepository.pm", "$bundle/Repository/EventRepository.pm", "$bundle/Repository/LoanRepository.pm", "$bundle/Service/RequestDecisionService.pm", "$bundle/Service/RequestService.pm", "$bundle/Service/LoanIssuanceService.pm", "$bundle/Service/LoanReturnService.pm", "$bundle/Service/ConfiguredLoanPeriodPolicy.pm", "$bundle/Service/StaffDecisionAuthorization.pm", "$bundle/Service/StaffRequestDecisionApplication.pm", "$bundle/Service/StaffLoanIssuanceApplication.pm", "$bundle/static/css/jzl-digital-circulation.css", "$bundle/static/js/jzl-digital-circulation.js")) {
     Assert-Contract (($manifest -contains $runtime) -and (Test-Path (Join-Path $root $runtime))) "runtime file packaged: $runtime"
 }
 $tool = Read-Utf8TextFile (Join-Path $root $toolPath)
@@ -171,7 +171,7 @@ foreach ($pathProperty in $openapi.PSObject.Properties) {
         }
     }
 }
-Assert-Contract ($writeRoutes.Count -eq 3 -and $writeRoutes -contains 'post /requests' -and $writeRoutes -contains 'post /requests/{request_id}/decision' -and $writeRoutes -contains 'post /requests/{request_id}/issue') 'source OpenAPI has exactly three POST routes including staff issuance'
+Assert-Contract ($writeRoutes.Count -eq 4 -and $writeRoutes -contains 'post /requests' -and $writeRoutes -contains 'post /requests/{request_id}/decision' -and $writeRoutes -contains 'post /requests/{request_id}/issue' -and $writeRoutes -contains 'post /loans/{loan_id}/return') 'source OpenAPI has exactly four POST routes including patron return'
 $portalLoanGet = $openapi.'/patrons/{patron_id}/loans'.get
 Assert-Contract ($portalLoanGet.operationId -eq 'jzlListPatronDigitalLoans' -and $portalLoanGet.'x-mojo-to' -eq 'Com::JunaidZaidiLibrary::DigitalCirculation::Controller::Patrons#list_loans') 'portal loan-read OpenAPI route and controller operation agree'
 $portalLoanPatron = $portalLoanGet.parameters | Where-Object { $_.in -eq 'path' -and $_.name -eq 'patron_id' }
@@ -186,6 +186,24 @@ $loanRepository = Read-Utf8TextFile (Join-Path $root "$bundle/Repository/LoanRep
 Assert-Contract ($portalLoanApplication.Contains('PortalServiceAuthorization') -and -not $portalLoanApplication.Contains('StaffDecisionAuthorization') -and $portalLoanApplication.Contains('sub list_patron_loans') -and $portalLoanApplication.Contains('list_for_patron') -and -not $portalLoanApplication.Contains('portal_ebook_uuid')) 'PortalLoanReadApplication uses portal authorization and repository list_for_patron'
 Assert-Contract ($patronsController.Contains('sub list_loans') -and $patronsController.Contains('PortalLoanReadApplication') -and -not $patronsController.Contains('StaffDecisionAuthorization') -and $patronsController.Contains('X-Correlation-ID') -and -not $patronsController.Contains('selectrow') -and -not $patronsController.Contains('INSERT')) 'patrons controller is a thin read adapter without SQL writes'
 Assert-Contract ($loanRepository.Contains('sub list_for_patron') -and $loanRepository.Contains('INNER JOIN') -and $loanRepository.Contains('portal_request_id')) 'list_for_patron joins requests for portal_request_id'
+$returnPost = $openapi.'/loans/{loan_id}/return'.post
+Assert-Contract ($returnPost.operationId -eq 'jzlReturnDigitalLoan' -and $returnPost.'x-mojo-to' -eq 'Com::JunaidZaidiLibrary::DigitalCirculation::Controller::Loans#return_loan') 'patron return OpenAPI route and controller operation agree'
+Assert-Contract ($returnPost.'x-koha-authorization'.permissions.circulate -eq 'circulate_remaining_permissions') 'patron return route declares established Koha permission'
+$returnPath = $returnPost.parameters | Where-Object { $_.in -eq 'path' -and $_.name -eq 'loan_id' }
+$returnCorrelation = $returnPost.parameters | Where-Object { $_.in -eq 'header' -and $_.name -eq 'X-Correlation-ID' }
+$returnBody = $returnPost.parameters | Where-Object { $_.in -eq 'body' -and $_.name -eq 'body' }
+Assert-Contract ($returnPath.required -and $returnCorrelation.required -and $returnBody.required) 'patron return requires path, correlation header, and body'
+Assert-Contract ($returnBody.schema.additionalProperties -eq $false -and $returnBody.schema.required.Count -eq 3 -and $returnBody.schema.properties.patron_id -and $returnBody.schema.properties.portal_request_id -and $returnBody.schema.properties.expected_row_version) 'patron return body is closed and carries correlation fields'
+Assert-Contract ($returnPost.responses.'200' -and $returnPost.responses.'400' -and $returnPost.responses.'401' -and $returnPost.responses.'403' -and $returnPost.responses.'404' -and $returnPost.responses.'409' -and $returnPost.responses.'500' -and $returnPost.responses.'503') 'patron return response statuses are complete'
+$loanReturnService = Read-Utf8TextFile (Join-Path $root "$bundle/Service/LoanReturnService.pm")
+$portalLoanReturnApplication = Read-Utf8TextFile (Join-Path $root "$bundle/Service/PortalLoanReturnApplication.pm")
+$loansController = Read-Utf8TextFile (Join-Path $root "$bundle/Controller/Loans.pm")
+Assert-Contract ($loanReturnService.Contains('RETURNED') -and $loanReturnService.Contains('insert_loan_returned_event') -and $loanReturnService.Contains('update_active_return') -and $loanReturnService.Contains('idempotent_replay') -and -not ($loanReturnService -match '\b(?:AddIssue|AddReturn|GetIssue)\b')) 'LoanReturnService returns ACTIVE loans without native Koha circulation mutation'
+$eventRepository = Read-Utf8TextFile (Join-Path $root "$bundle/Repository/EventRepository.pm")
+Assert-Contract ($eventRepository.Contains("event_type = 'LOAN_RETURNED'") -or $eventRepository.Contains('LOAN_RETURNED')) 'event repository records LOAN_RETURNED'
+Assert-Contract ($portalLoanReturnApplication.Contains('PortalServiceAuthorization') -and -not $portalLoanReturnApplication.Contains('StaffDecisionAuthorization') -and $portalLoanReturnApplication.Contains('sub return_loan')) 'PortalLoanReturnApplication uses portal service authorization'
+Assert-Contract ($loansController.Contains('sub return_loan') -and $loansController.Contains('PortalLoanReturnApplication') -and $loansController.Contains('X-Correlation-ID') -and -not $loansController.Contains('StaffDecisionAuthorization')) 'loans controller exposes thin portal return adapter'
+Assert-Contract ($loanRepository.Contains('sub get_for_return') -and $loanRepository.Contains('sub update_active_return') -and $loanRepository.Contains('FOR UPDATE')) 'loan repository supports locked return reads and conditional ACTIVE updates'
 $issuePost = $openapi.'/requests/{request_id}/issue'.post
 Assert-Contract ($issuePost.operationId -eq 'jzlIssueDigitalLoan' -and $issuePost.'x-mojo-to' -eq 'Com::JunaidZaidiLibrary::DigitalCirculation::Controller::Requests#issue') 'staff issuance OpenAPI route and controller operation agree'
 Assert-Contract ($issuePost.'x-koha-authorization'.permissions.circulate -eq 'circulate_remaining_permissions') 'staff issuance route declares established Koha permission'
@@ -264,7 +282,8 @@ if ($Kpz) {
         }
     }
     Assert-Contract ($operationIds.Count -eq ($operationIds | Select-Object -Unique).Count) 'packaged OpenAPI operation IDs are unique'
-    Assert-Contract ($postRoutes.Count -eq 3 -and $postRoutes -contains '/requests' -and $postRoutes -contains '/requests/{request_id}/decision' -and $postRoutes -contains '/requests/{request_id}/issue') 'packaged OpenAPI has exactly three POST routes including staff issuance'
+    Assert-Contract ($postRoutes.Count -eq 4 -and $postRoutes -contains '/requests' -and $postRoutes -contains '/requests/{request_id}/decision' -and $postRoutes -contains '/requests/{request_id}/issue' -and $postRoutes -contains '/loans/{loan_id}/return') 'packaged OpenAPI has exactly four POST routes including patron return'
+    Assert-Contract ($packagedOpenapi.'/loans/{loan_id}/return'.post.operationId -eq 'jzlReturnDigitalLoan') 'packaged return operation ID is correct'
     Assert-Contract ($packagedOpenapi.'/requests/{request_id}/issue'.post.operationId -eq 'jzlIssueDigitalLoan') 'packaged issuance operation ID is correct'
     $post = $packagedOpenapi.'/requests'.post
     Assert-Contract ($post.operationId -eq 'jzlCreateDigitalRequest') 'packaged request operation ID is correct'
@@ -284,6 +303,7 @@ if ($Kpz) {
         Assert-Contract (-not ($packagedTool -match ">\s*$control(?: Request)?\s*<") -and -not ($packagedStaffJs -match "\.textContent\s*=\s*['""]$control(?: Request)?['""]")) "packaged staff tool has no $control write control"
     }
     Assert-Contract ($names -contains "$bundle/Service/StaffLoanIssuanceApplication.pm" -and $names -contains "$bundle/Service/ConfiguredLoanPeriodPolicy.pm" -and $names -contains "$bundle/Service/LoanIssuanceService.pm") 'packaged archive includes Phase 2C issuance runtime modules'
+    Assert-Contract ($names -contains "$bundle/Service/LoanReturnService.pm" -and $names -contains "$bundle/Service/PortalLoanReturnApplication.pm" -and $names -contains "$bundle/Controller/Loans.pm") 'packaged archive includes Phase 4B return runtime modules'
     Assert-Contract ($packagedConfigure.Contains('name="csrf_token"')) 'packaged configuration includes CSRF token field'
     Assert-Contract (-not ($packagedConfigure -match 'name="[^"]*(?:client_secret|bearer|password|database|dsn)[^"]*"')) 'packaged configuration requests no credentials'
     Assert-Contract (-not ($productionText -match '(?<![A-Za-z0-9_])[A-Za-z]:\\[^\\\r\n]{2,}\\|/var/lib/koha/library|Authorization:\s*Bearer\s+[A-Za-z0-9._~+/-]{12,}|(?:client_secret|password)\s*(?:=>|=)\s*[''"][^''"]+[''"]')) 'packaged production files contain no paths or literal credentials'
