@@ -133,10 +133,41 @@ def check_source() -> None:
     )
     for name in EXPECTED_TABLES:
         require(f"table('{name}')" in source, f"expected table mapping: {name}")
-    require("INSERT IGNORE INTO `$v`" in source, "schema version insertion is retry-safe")
+    stamp_helper = re.search(r"sub _stamp_schema_state \{.*?\n\}", source, re.DOTALL)
+    require(
+        stamp_helper is not None
+        and "INSERT INTO `$versions`" in stamp_helper.group()
+        and "ON DUPLICATE KEY UPDATE" in stamp_helper.group()
+        and re.search(r"plugin_version\s*=\s*VALUES\(plugin_version\)", stamp_helper.group()),
+        "schema state uses an explicit idempotent plugin-version upsert",
+    )
+    require("INSERT IGNORE INTO `$v`" not in source, "stale INSERT IGNORE version-stamp path is absent")
     require(source.count("CREATE TABLE IF NOT EXISTS") == 5, "partial migration retry preserves existing tables")
-    require("$self->_verify_schema($dbh);" in source, "install verifies schema before success")
-    require("Schema version 1 was not recorded" in source, "install verifies schema version 1")
+    install_flow = re.search(r"sub install \{.*?\n\}", source, re.DOTALL)
+    require(
+        install_flow is not None
+        and all(
+            token in install_flow.group()
+            for token in (
+                "$self->_migration_001($dbh);",
+                "$dbh->begin_work;",
+                "$self->_stamp_schema_state($dbh);",
+                "$self->_verify_schema($dbh);",
+                "$dbh->commit;",
+                "$dbh->rollback;",
+            )
+        ),
+        "install transactionally stamps and strictly verifies after schema migration",
+    )
+    require(
+        "Schema state must contain exactly one canonical row" in source
+        and "Schema version 1 was not recorded" in source,
+        "install verifies one canonical schema-1/current-version state",
+    )
+    require(not re.search(r"\bDROP\s+TABLE\b", source, re.I), "upgrade source never drops plugin tables")
+    require((ROOT / "t" / "plugin_upgrade_version_stamp.t").is_file(), "focused prior-version upgrade test exists")
+    require((ROOT / "t" / "lib" / "PluginUpgradeFakes.pm").is_file(), "focused upgrade database fake exists")
+    require((ROOT / "scripts" / "simulate_upgrade_version_stamp.py").is_file(), "isolated upgrade simulation exists")
     require("SELECT GET_LOCK(?, 30)" in source and "== 1" in source, "migration lock result is checked")
     require("SELECT RELEASE_LOCK(?)" in source, "migration lock release is always attempted")
     require("migration failed: " in source and "_safe_install_error" in source, "safe detailed migration logging")
@@ -993,6 +1024,18 @@ def check_archive(path: pathlib.Path) -> None:
         require(
             f"our $VERSION             = '{PLUGIN_VERSION}';" in packaged_main,
             "packaged internal plugin version is 0.2.3",
+        )
+        require(
+            "sub _stamp_schema_state" in packaged_main
+            and "ON DUPLICATE KEY UPDATE" in packaged_main
+            and re.search(r"plugin_version\s*=\s*VALUES\(plugin_version\)", packaged_main)
+            and "INSERT IGNORE INTO `$v`" not in packaged_main,
+            "packaged upgrade path explicitly refreshes the plugin-version stamp",
+        )
+        require(
+            "Schema state must contain exactly one canonical row" in packaged_main
+            and "Schema version 1 was not recorded" in packaged_main,
+            "packaged upgrade path retains strict schema-state verification",
         )
         require(
             "return 'jzl-digital-circulation';" in packaged_main,

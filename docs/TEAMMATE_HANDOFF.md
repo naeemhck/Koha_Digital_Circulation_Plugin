@@ -83,6 +83,15 @@ auditable.
 | Phase 4B patron return | Implemented (`POST /loans/{loan_id}/return`) — not live-verified; portal flag remains disabled |
 | Circulation staff shortcut | Integrated (navigation only; combined release not deployed) |
 
+The 0.2.3 upgrade retains schema version 1. A dedicated post-migration,
+transactional upsert updates the one canonical schema-state row's
+`plugin_version` from 0.2.2 to 0.2.3 before strict verification and commit.
+This is release-metadata maintenance, not schema migration 2, and does not
+modify requests, loans, renewals, events, lifecycle values, or native Koha
+circulation. The earlier undeployed KPZ with SHA-256
+`2130ce2c6385c2a506ee9899ad6e958c8266c896ffda1fb462215c896f0eb8ba`
+is superseded and must not be installed.
+
 ## Staff Circulation shortcut
 
 On Koha Circulation home (`circulation-home.pl`), `intranet_js` injects a

@@ -11,15 +11,35 @@ use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation;
             tables => { map { $_ => 1 } qw(plugin_jzl_ebook_requests plugin_jzl_ebook_loans plugin_jzl_ebook_renewals) },
             skip   => $args{skip},
             calls  => [],
+            schema_rows => [],
         }, $class;
     }
     sub do {
-        my ( $self, $sql ) = @_;
+        my ( $self, $sql, $attr, @bind ) = @_;
         push @{ $self->{calls} }, $sql;
         if ( $sql =~ /CREATE TABLE IF NOT EXISTS `([^`]+)`/ ) {
             $self->{tables}{$1} = 1 unless ( $self->{skip} // '' ) eq $1;
         }
-        $self->{version} = 1 if $sql =~ /INSERT IGNORE INTO `plugin_jzl_ebook_schema_versions`/;
+        if ( $sql =~ /ON DUPLICATE KEY UPDATE/ ) {
+            $self->{schema_rows} = [
+                {
+                    schema_version => $bind[0],
+                    plugin_version => $bind[1],
+                }
+            ];
+        }
+        return 1;
+    }
+    sub begin_work {
+        my ($self) = @_;
+        $self->{snapshot} = [ map { +{%$_} } @{ $self->{schema_rows} } ];
+        return 1;
+    }
+    sub commit { delete $_[0]{snapshot}; return 1 }
+    sub rollback {
+        my ($self) = @_;
+        $self->{schema_rows} = delete $self->{snapshot}
+            if $self->{snapshot};
         return 1;
     }
     sub selectrow_array {
@@ -28,7 +48,13 @@ use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation;
         return 1 if $sql =~ /GET_LOCK/;
         if ( $sql =~ /RELEASE_LOCK/ ) { $self->{released}++; return 1 }
         return $self->{tables}{ $bind[0] } ? 1 : 0 if $sql =~ /information_schema\.tables/;
-        return $self->{version} ? 1 : 0 if $sql =~ /schema_version/;
+        return scalar @{ $self->{schema_rows} }
+            if $sql =~ /schema_versions`\s*$/;
+        return scalar grep {
+            $_->{schema_version} == $bind[0]
+                && $_->{plugin_version} eq $bind[1]
+        } @{ $self->{schema_rows} }
+            if $sql =~ /schema_version = \? AND plugin_version = \?/;
         die "Unexpected SQL: $sql";
     }
 }
@@ -42,7 +68,9 @@ my $retry_dbh = Local::MigrationDBH->new;
 }
 ok $retry_dbh->{tables}{plugin_jzl_ebook_events}, 'retry creates events table';
 ok $retry_dbh->{tables}{plugin_jzl_ebook_schema_versions}, 'retry creates schema-version table';
-ok $retry_dbh->{version}, 'retry records schema version 1';
+is_deeply $retry_dbh->{schema_rows},
+    [ { schema_version => 1, plugin_version => '0.2.3' } ],
+    'retry records canonical schema 1 and current plugin version';
 ok $retry_dbh->{released}, 'retry releases migration lock';
 ok !grep( /DROP TABLE/i, @{ $retry_dbh->{calls} } ), 'retry is non-destructive';
 

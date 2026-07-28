@@ -243,13 +243,26 @@ sub _migration_001 {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     });
 
-    $dbh->do(
-        "INSERT IGNORE INTO `$v` (schema_version, plugin_version, migration_name, checksum) VALUES (1, ?, ?, ?)",
+    return 1;
+}
+
+sub _stamp_schema_state {
+    my ( $self, $dbh ) = @_;
+    my $versions = $self->table('schema_versions');
+
+    my $written = $dbh->do(
+        "INSERT INTO `$versions` (schema_version, plugin_version, migration_name, checksum) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            plugin_version = VALUES(plugin_version),
+            migration_name = VALUES(migration_name),
+            checksum = VALUES(checksum)",
         undef,
+        $SCHEMA_VERSION,
         $VERSION,
         '001_initial_schema',
         '69bcf09d56f99afe'
     );
+    die 'Schema version stamp could not be written' unless defined $written;
 
     return 1;
 }
@@ -267,6 +280,12 @@ sub _verify_schema {
     }
 
     my $versions = $self->table('schema_versions');
+    my ($state_rows) = $dbh->selectrow_array(
+        "SELECT COUNT(*) FROM `$versions`",
+    );
+    die 'Schema state must contain exactly one canonical row'
+        unless defined $state_rows && $state_rows == 1;
+
     my ($recorded) = $dbh->selectrow_array(
         "SELECT COUNT(*) FROM `$versions` WHERE schema_version = ? AND plugin_version = ?",
         undef,
@@ -294,6 +313,8 @@ sub install {
     my $dbh = C4::Context->dbh;
     my $lock_name = 'jzl_digital_circulation_schema';
     my $failure;
+    my $rollback_failure;
+    my $transaction_started = 0;
 
     eval {
         my ($lock_acquired) = $dbh->selectrow_array( 'SELECT GET_LOCK(?, 30)', undef, $lock_name );
@@ -301,9 +322,23 @@ sub install {
             unless defined $lock_acquired && $lock_acquired == 1;
 
         $self->_migration_001($dbh);
+        $dbh->begin_work;
+        $transaction_started = 1;
+        $self->_stamp_schema_state($dbh);
         $self->_verify_schema($dbh);
+        $dbh->commit;
+        $transaction_started = 0;
         1;
-    } or $failure = $@ || 'unknown migration error';
+    } or do {
+        $failure = $@ || 'unknown migration error';
+        if ($transaction_started) {
+            eval {
+                $dbh->rollback;
+                $transaction_started = 0;
+                1;
+            } or $rollback_failure = $@ || 'unknown rollback error';
+        }
+    };
 
     my $release_failure;
     eval {
@@ -314,6 +349,9 @@ sub install {
     if ($failure) {
         warn 'PLUGIN_SCHEMA_UNAVAILABLE: migration failed: '
             . $self->_safe_install_error($failure);
+        warn ' PLUGIN_SCHEMA_ROLLBACK_FAILED: '
+            . $self->_safe_install_error($rollback_failure)
+            if $rollback_failure;
         warn ' PLUGIN_SCHEMA_LOCK_RELEASE_FAILED: '
             . $self->_safe_install_error($release_failure)
             if $release_failure;

@@ -48,10 +48,17 @@ Assert-Contract (-not ($statements[3].Value -match 'ON DELETE RESTRICT\s*\)\s*\)
 foreach ($name in @('requests','loans','renewals','events','schema_versions')) {
     Assert-Contract ($source.Contains("table('$name')")) "expected table mapping: $name"
 }
-Assert-Contract ($source.Contains('INSERT IGNORE INTO `$v`')) 'schema version insertion is retry-safe'
+$stampHelper = [regex]::Match($source, 'sub _stamp_schema_state \{.*?\n\}', [Text.RegularExpressions.RegexOptions]::Singleline).Value
+Assert-Contract ($stampHelper.Contains('INSERT INTO `$versions`') -and $stampHelper.Contains('ON DUPLICATE KEY UPDATE') -and ($stampHelper -match 'plugin_version\s*=\s*VALUES\(plugin_version\)')) 'schema state uses an explicit idempotent plugin-version upsert'
+Assert-Contract (-not $source.Contains('INSERT IGNORE INTO `$v`')) 'stale INSERT IGNORE version-stamp path is absent'
 Assert-Contract (([regex]::Matches($source, 'CREATE TABLE IF NOT EXISTS')).Count -eq 5) 'partial migration retry preserves existing tables'
-Assert-Contract ($source.Contains('$self->_verify_schema($dbh);')) 'install verifies schema before success'
-Assert-Contract ($source.Contains('Schema version 1 was not recorded')) 'install verifies schema version 1'
+$installFlow = [regex]::Match($source, 'sub install \{.*?\n\}', [Text.RegularExpressions.RegexOptions]::Singleline).Value
+Assert-Contract ($installFlow.Contains('$self->_migration_001($dbh);') -and $installFlow.Contains('$dbh->begin_work;') -and $installFlow.Contains('$self->_stamp_schema_state($dbh);') -and $installFlow.Contains('$self->_verify_schema($dbh);') -and $installFlow.Contains('$dbh->commit;') -and $installFlow.Contains('$dbh->rollback;')) 'install transactionally stamps and strictly verifies after schema migration'
+Assert-Contract ($source.Contains('Schema state must contain exactly one canonical row') -and $source.Contains('Schema version 1 was not recorded')) 'install verifies one canonical schema-1/current-version state'
+Assert-Contract (-not ($source -match '(?i)\bDROP\s+TABLE\b')) 'upgrade source never drops plugin tables'
+Assert-Contract (Test-Path (Join-Path $root 't/plugin_upgrade_version_stamp.t')) 'focused prior-version upgrade test exists'
+Assert-Contract (Test-Path (Join-Path $root 't/lib/PluginUpgradeFakes.pm')) 'focused upgrade database fake exists'
+Assert-Contract (Test-Path (Join-Path $root 'scripts/simulate_upgrade_version_stamp.py')) 'isolated upgrade simulation exists'
 Assert-Contract ($source.Contains('SELECT GET_LOCK(?, 30)') -and $source.Contains('lock_acquired == 1')) 'migration lock result is checked'
 Assert-Contract ($source.Contains('SELECT RELEASE_LOCK(?)')) 'migration lock release is attempted'
 Assert-Contract ($source.Contains('migration failed: ') -and $source.Contains('_safe_install_error')) 'safe detailed migration logging'
@@ -276,6 +283,8 @@ if ($Kpz) {
     Assert-Contract ($names -contains "$bundle/configure.tt") 'archive contains configure.tt at bundle root'
     Assert-Contract (-not ($names | Where-Object { $_ -like 'Koha_Digital_Circulation_Plugin/*' })) 'archive has no extra repository directory'
     Assert-Contract ($packagedMain.Contains("our `$VERSION             = '0.2.3';")) 'packaged internal plugin version is 0.2.3'
+    Assert-Contract ($packagedMain.Contains('sub _stamp_schema_state') -and $packagedMain.Contains('ON DUPLICATE KEY UPDATE') -and ($packagedMain -match 'plugin_version\s*=\s*VALUES\(plugin_version\)') -and -not $packagedMain.Contains('INSERT IGNORE INTO `$v`')) 'packaged upgrade path explicitly refreshes the plugin-version stamp'
+    Assert-Contract ($packagedMain.Contains('Schema state must contain exactly one canonical row') -and $packagedMain.Contains('Schema version 1 was not recorded')) 'packaged upgrade path retains strict schema-state verification'
     Assert-Contract ($packagedMain.Contains("return 'jzl-digital-circulation';")) 'packaged API namespace is unchanged'
     $packagedOpenapi = $packagedOpenapiText | ConvertFrom-Json
     $operationIds = @()
