@@ -269,6 +269,7 @@ if ($Kpz) {
         $packagedTool = Read-ArchiveText $archive "$bundle/tool.tt"
         $packagedStaffJs = Read-ArchiveText $archive "$bundle/static/js/jzl-digital-circulation.js"
         $packagedConfigure = Read-ArchiveText $archive "$bundle/configure.tt"
+        $packagedReportDefinitions = Read-ArchiveText $archive "$bundle/Service/SavedReportDefinitions.pm"
         $productionText = ($archive.Entries | Where-Object {
             $_.FullName -match '\.(?:pm|json|tt|js|css)$'
         } | ForEach-Object {
@@ -325,7 +326,6 @@ if ($Kpz) {
     Assert-Contract ($names -contains "$bundle/Service/StaffLoanIssuanceApplication.pm" -and $names -contains "$bundle/Service/ConfiguredLoanPeriodPolicy.pm" -and $names -contains "$bundle/Service/LoanIssuanceService.pm") 'packaged archive includes Phase 2C issuance runtime modules'
     Assert-Contract ($names -contains "$bundle/Service/LoanReturnService.pm" -and $names -contains "$bundle/Service/PortalLoanReturnApplication.pm" -and $names -contains "$bundle/Controller/Loans.pm") 'packaged archive includes Phase 4B return runtime modules'
     Assert-Contract ($names -contains "$bundle/Service/SavedReportDefinitions.pm" -and $names -contains "$bundle/Service/SavedReportProvisioning.pm" -and $names -contains "$bundle/Repository/SavedReportRepository.pm") 'packaged archive includes Phase 6 Saved Reports runtime modules'
-    $packagedReportDefinitions = Read-ArchiveText $archive "$bundle/Service/SavedReportDefinitions.pm"
     Assert-Contract (([regex]::Matches($packagedReportDefinitions, 'slug =>')).Count -eq 10 -and $packagedReportDefinitions.Contains('<<Item type|itemtypes>>')) 'packaged archive has ten Item Type-filtered managed reports'
     Assert-Contract ($packagedConfigure.Contains('name="csrf_token"')) 'packaged configuration includes CSRF token field'
     Assert-Contract (-not ($packagedConfigure -match 'name="[^"]*(?:client_secret|bearer|password|database|dsn)[^"]*"')) 'packaged configuration requests no credentials'
