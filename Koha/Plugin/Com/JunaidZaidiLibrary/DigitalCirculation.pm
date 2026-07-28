@@ -13,7 +13,7 @@ use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::Configur
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::LoanIssuanceService;
 use Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation::Service::PortalServiceAuthorization;
 
-our $VERSION             = '0.2.2';
+our $VERSION             = '0.2.3';
 our $SCHEMA_VERSION      = 1;
 our $TESTED_KOHA_VERSION = '26.05.01.000';
 
@@ -22,7 +22,7 @@ our $metadata = {
     author          => 'Junaid Zaidi Library, COMSATS University Islamabad',
     description     => 'Koha-authoritative request, approval, renewal, return, expiry, revocation, and access-state management for protected institutional eBooks.',
     date_authored   => '2026-07-21',
-    date_updated    => '2026-07-21',
+    date_updated    => '2026-07-28',
     minimum_version => '26.05.00.000',
     version         => $VERSION,
     class           => __PACKAGE__,

@@ -13,7 +13,7 @@ docs remain under `docs/`.
 | Checkpoint base commit | `e19a669` (Phase 2C–3A source) |
 | Plugin Perl package | `Koha::Plugin::Com::JunaidZaidiLibrary::DigitalCirculation` |
 | API namespace | `jzl-digital-circulation` |
-| Plugin version | `0.2.2` |
+| Plugin version | `0.2.3` |
 | Minimum Koha version | `26.05.00.000` |
 | Tested Koha version | `26.05.01.000` |
 | Schema version | `1` |
