@@ -22,7 +22,7 @@ EXPECTED_TABLES = [
     "events",
     "schema_versions",
 ]
-PLUGIN_VERSION = "0.4.3"
+PLUGIN_VERSION = "0.4.4"
 
 # Detect real Windows absolute paths, UNC shares, Koha instance paths, usable
 # bearer samples, and literal credentials. The drive-letter branch requires a
@@ -115,7 +115,7 @@ def check_source() -> None:
         if line.strip()
     ]
     openapi = json.loads((ROOT / BUNDLE / "openapi.json").read_text(encoding="utf-8"))
-    require(f"our $VERSION             = '{PLUGIN_VERSION}';" in source, "plugin version is 0.4.3")
+    require(f"our $VERSION             = '{PLUGIN_VERSION}';" in source, "plugin version is 0.4.4")
     require("our $SCHEMA_VERSION      = 1;" in source, "schema version remains 1")
     require("minimum_version => '26.05.00.000'" in source, "minimum Koha version remains 26.05.00.000")
 
@@ -1048,7 +1048,7 @@ def check_archive(path: pathlib.Path) -> None:
         packaged_main = archive.read(f"{BUNDLE_MANIFEST}.pm").decode("utf-8")
         require(
             f"our $VERSION             = '{PLUGIN_VERSION}';" in packaged_main,
-            "packaged internal plugin version is 0.4.3",
+            "packaged internal plugin version is 0.4.4",
         )
         require(
             "sub _stamp_schema_state" in packaged_main

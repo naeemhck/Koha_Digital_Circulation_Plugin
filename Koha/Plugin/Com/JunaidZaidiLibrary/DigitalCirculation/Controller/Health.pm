@@ -32,7 +32,7 @@ sub health {
         status => $db ? 200 : 503,
         json => {
             loaded => true,
-            plugin_version => '0.4.3',
+            plugin_version => '0.4.4',
             schema_version => 1,
             database => $db ? 'available' : 'unavailable',
             koha_compatible => Koha->VERSION =~ /\A26\.05\./ ? true : false,
@@ -46,7 +46,7 @@ sub health {
 sub version {
     my ($c) = @_;
     return $c->render(json => {
-        plugin_version => '0.4.3',
+        plugin_version => '0.4.4',
         tested_koha_version => '26.05.01.000',
         minimum_koha_version => '26.05.00.000',
         schema_version => 1,

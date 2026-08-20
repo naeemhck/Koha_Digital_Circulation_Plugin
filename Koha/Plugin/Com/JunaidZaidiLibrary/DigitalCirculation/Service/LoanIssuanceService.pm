@@ -466,7 +466,9 @@ sub _plugin_table {
 
 sub _koha_now {
     require Koha::DateUtils;
-    return Koha::DateUtils::dt_from_string()->strftime('%Y-%m-%d %H:%M:%S');
+    my $dt = Koha::DateUtils::dt_from_string();
+    $dt->set_time_zone('UTC');
+    return $dt->strftime('%Y-%m-%d %H:%M:%S');
 }
 
 sub _random_uuid {
